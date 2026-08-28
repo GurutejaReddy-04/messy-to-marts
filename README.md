@@ -230,7 +230,66 @@ The executive dashboard consolidates key business metrics into a unified view:
 
 ## Maintenance Flow Demonstration
 
-*(Placeholder for Phase 10: Live proof demonstrating schema modification isolation in the staging layer).*
+A core architectural promise of modular analytics engineering is schema change isolation: when an upstream transactional database alters its column naming or structure, the modification is contained exclusively within the **staging layer** (`models/staging/`). Intermediate models, marts tables, and downstream BI dashboards require **zero modifications**.
+
+### 1. The Upstream Breaking Change
+An upstream source migration renamed the transactional monetary column in `raw.orders` (and `raw_data/orders.csv`) from `order_value` to `order_amount`.
+
+### 2. Immediate Failure in Staging
+Running `dbt run` immediately flagged the breaking change at the staging boundary while protecting downstream relations from silent corruption:
+
+```text
+16:45:46  1 of 8 START sql view model public_staging.stg_events .......................... [RUN]
+16:45:46  2 of 8 START sql view model public_staging.stg_orders .......................... [RUN]
+16:45:46  2 of 8 ERROR creating sql view model public_staging.stg_orders ................. [ERROR in 0.14s]
+16:45:46  4 of 8 SKIP relation public_marts.fct_revenue_trends ........................... [SKIP]
+16:45:46  6 of 8 SKIP relation public_intermediate.int_user_first_purchase ............... [SKIP]
+16:45:46  7 of 8 SKIP relation public_marts.monthly_cohort_retention ..................... [SKIP]
+
+[ERROR]: in model stg_orders (models/staging/stg_orders.sql)
+  Database Error in model stg_orders (models/staging/stg_orders.sql)
+  column "order_value" does not exist
+  LINE 23: order_value,
+```
+
+### 3. The 1-Line Staging Adaptation
+The change was resolved entirely within `models/staging/stg_orders.sql` by aliasing the renamed raw field back to the standardized internal identifier `order_value`:
+
+```diff
+ with raw_orders as (
+     select
+         order_id,
+         user_id,
+         order_date,
+-        order_value,
++        -- Adapt to upstream raw column rename (order_amount -> order_value)
++        order_amount as order_value,
+         order_status
+     from {{ source('raw', 'orders') }}
+ ),
+```
+
+### 4. Downstream Verification
+Re-executing `dbt run` and `dbt test` proved that all downstream models and BI dashboards functioned without a single change:
+
+```text
+16:46:05  1 of 8 OK created sql view model public_staging.stg_events ..................... [CREATE VIEW in 0.25s]
+16:46:05  2 of 8 OK created sql view model public_staging.stg_orders ..................... [CREATE VIEW in 0.16s]
+16:46:05  3 of 8 OK created sql view model public_staging.stg_users ...................... [CREATE VIEW in 0.25s]
+16:46:05  4 of 8 OK created sql incremental model public_marts.fct_revenue_trends ........ [MERGE 1 in 0.20s]
+16:46:05  5 of 8 OK created sql view model public_intermediate.int_sessionized_events .... [CREATE VIEW in 0.12s]
+16:46:05  6 of 8 OK created sql view model public_intermediate.int_user_first_purchase ... [CREATE VIEW in 0.13s]
+16:46:05  7 of 8 OK created sql table model public_marts.funnel_summary .................. [SELECT 3 in 0.10s]
+16:46:05  8 of 8 OK created sql table model public_marts.monthly_cohort_retention ........ [SELECT 78 in 0.13s]
+16:46:05  Done. PASS=8 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=8
+
+16:46:16  Finished running 62 data tests in 0 hours 0 minutes and 1.99 seconds (1.99s).
+16:46:16  Done. PASS=62 WARN=0 ERROR=0 SKIP=0 NO-OP=0 REUSED=0 TOTAL=62
+```
+
+- **Models modified:** Exactly 1 (`models/staging/stg_orders.sql`).
+- **Models untouched:** 7 (`stg_users`, `stg_events`, `int_user_first_purchase`, `int_sessionized_events`, `fct_revenue_trends`, `monthly_cohort_retention`, `funnel_summary`).
+- **BI Dashboards modified:** 0 (Metabase queries continue referencing `public_marts.fct_revenue_trends` seamlessly).
 
 ---
 
