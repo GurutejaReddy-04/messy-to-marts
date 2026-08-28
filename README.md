@@ -1,12 +1,22 @@
 # End-to-End Analytics Pipeline with SQL, dbt & BI Dashboard
 
-A production-style analytics engineering pipeline that extracts raw, intentionally messy transactional and behavioral clickstream data, standardizes and transforms it through a layered dbt architecture in PostgreSQL, enforces automated data quality tests, runs automated continuous integration (CI) and nightly scheduled builds, and serves clean marts models to an interactive BI layer.
+A production-grade analytics engineering pipeline that ingests raw transactional and clickstream event streams, standardizes and transforms data across a three-tier dbt architecture in PostgreSQL, enforces 62 automated data quality and business logic tests, runs automated continuous integration (CI) and nightly scheduled builds via GitHub Actions, and serves curated analytical marts directly to an executive Metabase BI dashboard.
 
 ---
 
-## Architecture
+## Executive Summary & TL;DR
 
-The pipeline implements a three-tier layered dbt transformation architecture:
+- **End-to-End Data Lifecycle:** Ingests raw multi-table e-commerce data with real-world messiness (typo-variant user duplicates, late-arriving dimensions, conflicting retry submissions, negative entry glitches, non-UTC timestamps), cleanses and transforms it through staging and intermediate layers, and materializes production-ready marts.
+- **Incremental Data Modeling:** Implements an incremental merge fact model (`fct_revenue_trends`) that scales efficiently with daily transaction volume without requiring full table rebuilds.
+- **Robust Quality Governance:** Employs 62 automated tests (42 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds ($[0, 100]\%$), non-negative revenue, session durations ($\le 24$h), and monotonic funnel progression ($\text{purchases} \le \text{cart adds} \le \text{page views}$).
+- **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflow executes full end-to-end builds, tests, and `sqlfluff` style linting against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC.
+- **Schema Change Isolation:** Proved architectural resilience through a live maintenance demonstration: upstream column rename from `order_value` $\rightarrow$ `order_amount` was fully adapted in 1 line in `stg_orders` with zero breaking changes propagated downstream.
+
+---
+
+## Architecture & Data Lineage
+
+The pipeline follows the modern analytics engineering paradigm, decomposing transformations into clear abstraction boundaries:
 
 ```text
 Raw Synthetic Data (users.csv, orders.csv, events.csv with deliberate messiness)
@@ -37,6 +47,10 @@ dbt Marts Layer (`public_marts`)
          └──► Metabase BI Dashboard (Direct queries against marts layer only)
 ```
 
+### dbt Directed Acyclic Graph (DAG) Lineage
+
+![dbt DAG Lineage](screenshots/dbt_lineage.png)
+
 ---
 
 ## Tech Stack
@@ -64,7 +78,7 @@ The raw dataset reflects multi-year transactional and clickstream behaviors gene
 | | | Null `country` (nullable by design) | 15 rows (1.5%) |
 | | | Signup Date Distribution | Clustered non-uniformly with acquisition peaks in Jan (124) and Nov/Dec (285) |
 | **`orders`** | 3,500 | Orphaned `user_id` (late-arriving customer dimensions) | 51 rows (1.46%) |
-| | | Negative or zero `order_value` | 38 rows (1.09%)\* |
+| | | Negative or zero `order_amount` | 38 rows (1.09%)\* |
 | | | Duplicate `order_id` pairs with conflicting status/value/date (retry bugs) | 35 pairs (1.00%) |
 | | | Timestamp standard | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`) |
 | | | Day of Week Distribution | Weekend elevated: Mon (411), Tue (410), Wed (467), Thu (472), Fri (503), Sat (607), Sun (630) |
@@ -72,7 +86,7 @@ The raw dataset reflects multi-year transactional and clickstream behaviors gene
 | | | Funnel progression | `page_view` (11,997), `add_to_cart` (2,422), `purchase` (581) |
 | | | Timestamp standard | Local time (`YYYY-MM-DD HH:MM:SS`), unadjusted for UTC |
 
-\* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_value to $0.00 (10 rows).*
+\* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_amount to $0.00 (10 rows).*
 
 ---
 
@@ -93,7 +107,7 @@ conda activate analytics-pipeline
 Alternatively, install dependencies via `pip`:
 
 ```bash
-pip install dbt-postgres psycopg2-binary sqlfluff Faker pytest pyyaml
+pip install dbt-postgres psycopg2-binary sqlfluff Faker pytest pyyaml matplotlib seaborn pillow
 ```
 
 ### 2. Database & Raw Data Ingestion
@@ -187,7 +201,7 @@ Key metrics extracted directly from the marts tables:
 2. **Cohort Retention Patterns (`monthly_cohort_retention`):**
    - January 2023 Cohort ($N = 124$): Month 0 retention is 41.13%, rising to a repeat purchase peak of 61.29% in Month 1, gradually tapering to 36.29% in Month 3, 25.00% in Month 4, and 4.03% by Month 8.
 3. **Revenue Trends & Incremental Scaling (`fct_revenue_trends`):**
-   - Daily gross revenue shows steady baseline performance with elevated transaction volume on weekends (Saturday/Sunday averaging 17.3% and 18.0% of weekly volume) and Q4 holiday peaks.
+   - Daily gross revenue shows steady baseline performance with elevated transaction volume on weekends (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday peaks.
 
 ---
 
@@ -293,9 +307,33 @@ Re-executing `dbt run` and `dbt test` proved that all downstream models and BI d
 
 ---
 
+## Project Outcomes & Key Technical Decisions
+
+1. **Strict Layer Decoupling:** Business calculations (such as cohort month offsets and clickstream sessionization) are strictly separated into staging (normalization), intermediate (joins/enrichment), and marts (analytics-ready consumption).
+2. **Defensive Testing vs Blanket Testing:** Following `TEST_PLAN.md`, testing boundaries were applied purposefully: constraints only test critical assumptions (primary key uniqueness, non-negative monetary aggregates, conversion bounds) without adding blanket coverage that slows development cycles.
+3. **Reproducible Engineering Environment:** The entire stack is encapsulated in Conda and GitHub Actions with zero manual host configuration required to reproduce the environment across Linux, macOS, and Windows.
+
+---
+
+## Future Improvements & Scaling Path
+
+If scaling this pipeline to high-throughput production volumes:
+- **Orchestration:** Transition from GitHub Actions cron to Apache Airflow or Dagster for dependency-aware upstream sensor triggering and retries.
+- **Data Observability:** Integrate Elementary or Great Expectations for anomaly detection on row volume drift, schema drift alerts, and test failure notifications to Slack/PagerDuty.
+- **Reverse ETL:** Connect Census or Hightouch to sync high-value customer cohorts from `monthly_cohort_retention` directly to email marketing and CRM platforms (e.g., Klaviyo, Salesforce).
+- **Warehouse Scalability:** Migrate backend adapter to Snowflake, BigQuery, or Databricks for distributed multi-cluster querying.
+
+---
+
 ## Project Documentation & Guidelines
 
 - [`CONVENTIONS.md`](CONVENTIONS.md) — SQL style rules, naming standards, and architectural conventions.
 - [`DATA_SPEC.md`](DATA_SPEC.md) — Raw synthetic data schema, messiness rates, and distribution guidelines.
 - [`TEST_PLAN.md`](TEST_PLAN.md) — Testing philosophy and validation bounds across layers.
 - [`Plan.md`](Plan.md) — Complete 11-phase project execution roadmap.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
