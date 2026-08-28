@@ -14,7 +14,8 @@ with raw_orders as (
         order_id,
         user_id,
         order_date,
-        order_value,
+        -- Adapt to upstream raw column rename (order_amount -> order_value)
+        order_amount as order_value,
         order_status
     from {{ source('raw', 'orders') }}
 ),
