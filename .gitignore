@@ -1,24 +1,41 @@
-# dbt
+# dbt build & docs artifacts
 target/
 dbt_packages/
 logs/
+*.log
+dbt.log
 .user.yml
 
-# Python
+# Python caches & virtual environments
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .venv/
 venv/
 env/
 *.egg-info/
+.pytest_cache/
 
-# Env / secrets
+# Local databases & state
+*.db
+*.sqlite
+*.sqlite3
+metabase.db/
+
+# Secrets & Environment variables
 .env
+.env.*
+!.env.example
 
-# OS
+# Linters & Tool caches
+.sqlfluffcache
+
+# OS-generated files
 .DS_Store
 Thumbs.db
 
-# Editor
+# IDE & Editor configs
 .vscode/
 .idea/
+*.swp
