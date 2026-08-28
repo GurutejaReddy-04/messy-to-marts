@@ -68,7 +68,7 @@ def setup_database_and_load_data() -> None:
                 order_id INT,
                 user_id INT,
                 order_date VARCHAR(50),
-                order_value NUMERIC(10, 2),
+                order_amount NUMERIC(10, 2),
                 order_status VARCHAR(50)
             );
         """)

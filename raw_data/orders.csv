@@ -1,4 +1,4 @@
-order_id,user_id,order_date,order_value,order_status
+order_id,user_id,order_date,order_amount,order_status
 11918,389,2023-01-01T10:10:18Z,64.02,completed
 10046,9053,2023-01-01T10:45:10Z,58.47,completed
 10555,712,2023-01-01T13:42:00Z,21.42,completed

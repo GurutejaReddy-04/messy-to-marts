@@ -31,7 +31,7 @@ sources:
             description: "Foreign key referencing users table (~1.5% are late-arriving/orphaned keys)."
           - name: order_date
             description: "Order timestamp recorded in UTC ISO 8601 format."
-          - name: order_value
+          - name: order_amount
             description: "Monetary transaction total (contains ~1.09% negative or zero values due to entry errors and cancelled retries)."
           - name: order_status
             description: "Status of the order: completed, pending, returned, or cancelled."
