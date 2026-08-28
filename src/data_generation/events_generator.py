@@ -7,6 +7,7 @@ Implements:
 - ~1.0% orphaned user_id records (late-arriving or untracked visitors)
 """
 
+import math
 import random
 from datetime import datetime, timedelta
 
@@ -116,22 +117,39 @@ def generate_raw_events(user_records: list[dict]) -> list[dict]:
         is_orphaned_session = random_instance.random() < config.EVENT_ORPHANED_USER_RATE
         if is_orphaned_session:
             assigned_user_id = random_instance.choice(orphaned_user_pool)
-            start_month = random_instance.choices(range(1, 13), weights=[1.5, 1.1, 0.9, 0.8, 0.7, 0.7, 0.8, 0.8, 0.9, 1.1, 1.8, 1.9], k=1)[0]
-            start_day = random_instance.randint(1, 28)
-            session_start_dt = datetime(2023, start_month, start_day, random_instance.randint(0, 23), random_instance.randint(0, 59))
+            user_signup_str = ""
         else:
             assigned_user_id = random_instance.choice(valid_user_ids)
             user_signup_str = user_lookup[assigned_user_id]["signup_date"]
-            if user_signup_str:
-                user_signup_dt = datetime.strptime(user_signup_str, "%Y-%m-%d %H:%M:%S")
-            else:
-                user_signup_dt = datetime(2023, 1, 1, 0, 0, 0)
-            
-            end_period = datetime(2023, 12, 31, 23, 59, 59)
-            available_days = max(1, (end_period - user_signup_dt).days)
-            day_offset = int(random_instance.expovariate(1.0 / 40.0))
-            day_offset = min(day_offset, available_days)
-            session_start_dt = user_signup_dt + timedelta(days=day_offset, hours=random_instance.randint(0, 23), minutes=random_instance.randint(0, 59))
+
+        # Calculate session start timestamp using compound weights
+        start_bound = datetime.strptime(config.START_DATE, "%Y-%m-%d")
+        end_bound = datetime.strptime(config.END_DATE, "%Y-%m-%d")
+        if user_signup_str:
+            earliest_date = datetime.strptime(user_signup_str, "%Y-%m-%d %H:%M:%S").date()
+        else:
+            earliest_date = start_bound.date()
+        
+        latest_date = end_bound.date()
+        available_days = max(1, (latest_date - earliest_date).days + 1)
+        candidate_days = [earliest_date + timedelta(days=day_idx) for day_idx in range(available_days)]
+
+        day_weights: list[float] = []
+        for day_idx, candidate_day in enumerate(candidate_days):
+            recency_weight = math.exp(-day_idx / 60.0)
+            dow_weight = config.DAY_OF_WEEK_WEIGHTS[candidate_day.weekday()]
+            seasonal_weight = config.MONTHLY_SEASONAL_WEIGHTS[candidate_day.month - 1]
+            day_weights.append(recency_weight * dow_weight * seasonal_weight)
+
+        chosen_day = random_instance.choices(candidate_days, weights=day_weights, k=1)[0]
+        session_start_dt = datetime(
+            chosen_day.year,
+            chosen_day.month,
+            chosen_day.day,
+            random_instance.randint(0, 23),
+            random_instance.randint(0, 59),
+            random_instance.randint(0, 59),
+        )
 
         device_type = random_instance.choices(config.DEVICE_TYPES, weights=config.DEVICE_TYPE_WEIGHTS, k=1)[0]
 

@@ -8,40 +8,42 @@ Implements:
 - Timestamps stored in standard UTC ISO 8601 format
 """
 
+import math
 import random
 from datetime import datetime, timedelta
 
 import config
 
 
+
 def generate_clustered_order_timestamp(
     user_signup_str: str,
     random_instance: random.Random,
 ) -> datetime:
-    """Generate an order timestamp occurring after user signup with realistic seasonal weighting."""
+    """Generate an order timestamp occurring after user signup with realistic seasonal and weekend weighting."""
+    start_bound = datetime.strptime(config.START_DATE, "%Y-%m-%d")
+    end_bound = datetime.strptime(config.END_DATE, "%Y-%m-%d")
+
     if user_signup_str:
         user_signup_dt = datetime.strptime(user_signup_str, "%Y-%m-%d %H:%M:%S")
+        earliest_date = user_signup_dt.date()
     else:
-        # Fallback for users with null signup_date
-        user_signup_dt = datetime(2023, 1, 1, 0, 0, 0)
+        earliest_date = start_bound.date()
 
-    end_period = datetime(2023, 12, 31, 23, 59, 59)
-    if user_signup_dt >= end_period:
-        return end_period
+    latest_date = end_bound.date()
+    available_days = max(1, (latest_date - earliest_date).days + 1)
 
-    available_days = max(1, (end_period - user_signup_dt).days)
-    
-    # Weight towards recent days post-signup with weekend and Q4 holiday bumps
-    # Sample a day offset using an exponential-like distribution
-    day_offset = int(random_instance.expovariate(1.0 / 45.0))
-    day_offset = min(day_offset, available_days)
-    
-    candidate_date = user_signup_dt + timedelta(days=day_offset)
-    if candidate_date > end_period:
-        candidate_date = end_period - timedelta(days=random_instance.randint(0, 15))
+    candidate_days = [earliest_date + timedelta(days=day_idx) for day_idx in range(available_days)]
 
-    # Apply weekday/weekend adjustment
-    # If candidate falls on weekend, slight boost
+    day_weights: list[float] = []
+    for day_idx, candidate_day in enumerate(candidate_days):
+        recency_weight = math.exp(-day_idx / 75.0)
+        dow_weight = config.DAY_OF_WEEK_WEIGHTS[candidate_day.weekday()]
+        seasonal_weight = config.MONTHLY_SEASONAL_WEIGHTS[candidate_day.month - 1]
+        day_weights.append(recency_weight * dow_weight * seasonal_weight)
+
+    chosen_day = random_instance.choices(candidate_days, weights=day_weights, k=1)[0]
+
     hour = random_instance.choices(
         range(24),
         weights=[1, 1, 1, 1, 1, 2, 3, 5, 8, 9, 10, 10, 9, 9, 8, 8, 9, 10, 10, 9, 8, 6, 4, 2],
@@ -50,7 +52,7 @@ def generate_clustered_order_timestamp(
     minute = random_instance.randint(0, 59)
     second = random_instance.randint(0, 59)
 
-    return candidate_date.replace(hour=hour, minute=minute, second=second)
+    return datetime(chosen_day.year, chosen_day.month, chosen_day.day, hour, minute, second)
 
 
 def generate_raw_orders(user_records: list[dict]) -> list[dict]:

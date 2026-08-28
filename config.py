@@ -22,6 +22,14 @@ SEED_EVENTS = 202
 START_DATE = "2023-01-01"
 END_DATE = "2023-12-31"
 
+# Day of Week Distribution Weights (Monday=0 ... Sunday=6)
+# Saturday and Sunday are moderately elevated over weekdays (~25-30%)
+DAY_OF_WEEK_WEIGHTS = [1.00, 0.98, 1.00, 1.02, 1.15, 1.28, 1.32]
+
+# Monthly Seasonality Distribution Weights (Months 1 to 12)
+MONTHLY_SEASONAL_WEIGHTS = [1.20, 0.95, 0.90, 0.85, 0.80, 0.80, 0.85, 0.90, 0.95, 1.10, 1.40, 1.50]
+
+
 # Target Row Counts (Users: ~1000, Orders: ~3500, Events: ~15000)
 TOTAL_USERS_TARGET = 1000
 TOTAL_ORDERS_TARGET = 3500
