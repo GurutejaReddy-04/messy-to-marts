@@ -7,13 +7,11 @@
 }}
 
 /*
-Incremental Fact Mart: fct_revenue_trends
+Marts: Daily Revenue Fact Table (Incremental)
 
 Business rationale:
-- Aggregates daily transactional gross revenue, transaction counts, active purchasing customer counts,
-  and average order value (AOV) over time.
-- Configured as an incremental model using a merge strategy on 'order_date' to avoid full table rebuilds
-  as new transactional batches arrive, demonstrating production data engineering scalability.
+- Daily revenue rollup with order count and AOV.
+- Incremental merge avoids full table scans on every run.
 */
 
 with orders as (
@@ -25,7 +23,7 @@ with orders as (
         order_status
     from {{ ref('stg_orders') }}
     {% if is_incremental() %}
-        -- Incrementally process only dates that meet or exceed the highest date in the existing fact table
+        -- Only process new or updated dates
         where order_date >= (select max(order_date) from {{ this }})
     {% endif %}
 ),

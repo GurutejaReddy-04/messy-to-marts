@@ -1,11 +1,9 @@
 /*
-Mart model computing website conversion funnel metrics.
+Marts: E-Commerce Conversion Funnel
 
 Business rationale:
-- Measures traffic conversion progression across key visitor journey milestones:
-  Step 1 (Page Views) -> Step 2 (Add to Cart) -> Step 3 (Purchase Checkout).
-- Calculates both step-to-step conversion efficiencies and top-of-funnel overall conversion rates
-  to highlight drop-off bottlenecks in the user purchase flow.
+- Summarize 3-step visitor conversion: page_view -> add_to_cart -> purchase.
+- Computes both step-over-step efficiency and overall conversion from top of funnel.
 */
 
 with session_base as (
@@ -59,7 +57,6 @@ funnel_metrics as (
         funnel_step_order,
         funnel_step,
         session_count,
-        -- Step-over-step conversion efficiency
         round(
             case
                 when previous_step_count = 0 then 0.00
@@ -67,7 +64,6 @@ funnel_metrics as (
             end,
             2
         ) as step_conversion_pct,
-        -- Overall conversion relative to top-of-funnel visitors
         round(
             case
                 when top_step_count = 0 then 0.00

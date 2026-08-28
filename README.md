@@ -334,6 +334,13 @@ If scaling this pipeline to high-throughput production volumes:
 
 ---
 
+## Author
+
+**Guruteja Reddy N**  
+Analytics Engineer / Data Engineer
+
+---
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

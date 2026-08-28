@@ -1,14 +1,13 @@
-"""Renders high-fidelity BI dashboard charts and full dashboard views from PostgreSQL marts."""
+"""Renders BI dashboard charts from PostgreSQL marts."""
 
 from pathlib import Path
+import sys
 import psycopg2
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 import pandas as pd
-import numpy as np
 
-# Styling configuration for professional BI aesthetic
 plt.style.use('seaborn-v0_8-whitegrid')
 plt.rcParams['font.family'] = 'sans-serif'
 plt.rcParams['font.size'] = 11
@@ -22,17 +21,19 @@ SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_db_connection():
-    return psycopg2.connect(
-        dbname="analytics_pipeline",
-        user="postgres",
-        password="postgres",
-        host="localhost",
-        port="5432"
-    )
+    try:
+        return psycopg2.connect(
+            dbname="analytics_pipeline",
+            user="postgres",
+            password="postgres",
+            host="localhost",
+            port="5432"
+        )
+    except psycopg2.OperationalError as e:
+        sys.exit(f"Database connection failed: {e}\nEnsure PostgreSQL is running locally on port 5432.")
 
 
 def render_cohort_retention_chart():
-    """Render monthly cohort retention line chart."""
     conn = get_db_connection()
     query = """
         select
@@ -48,8 +49,6 @@ def render_cohort_retention_chart():
     conn.close()
 
     fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
-    
-    # Plot top cohorts with distinct colors
     palette = sns.color_palette("tab10", len(df_cohort['cohort_month'].unique()))
     
     for idx, (cohort, group) in enumerate(df_cohort.groupby('cohort_month')):
@@ -75,11 +74,9 @@ def render_cohort_retention_chart():
     output_path = SCREENSHOTS_DIR / "dashboard_cohort.png"
     plt.savefig(output_path, dpi=300)
     plt.close()
-    print(f"Saved: {output_path}")
 
 
 def render_funnel_chart():
-    """Render conversion funnel bar chart."""
     conn = get_db_connection()
     query = """
         select
@@ -95,7 +92,6 @@ def render_funnel_chart():
     conn.close()
 
     fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
-    
     colors = ['#2b5c8f', '#4682b4', '#5dade2']
     bars = ax.bar(
         df_funnel['funnel_step'],
@@ -129,11 +125,9 @@ def render_funnel_chart():
     output_path = SCREENSHOTS_DIR / "dashboard_funnel.png"
     plt.savefig(output_path, dpi=300)
     plt.close()
-    print(f"Saved: {output_path}")
 
 
 def render_revenue_trends_chart():
-    """Render daily revenue and average order value trends."""
     conn = get_db_connection()
     query = """
         select
@@ -153,8 +147,6 @@ def render_revenue_trends_chart():
     df_rev['aov_7d_ma'] = df_rev['average_order_value'].rolling(window=7, min_periods=1).mean()
 
     fig, ax1 = plt.subplots(figsize=(11, 6), dpi=300)
-
-    # Plot revenue on primary axis
     color_rev = '#1f77b4'
     ax1.plot(df_rev['order_date'], df_rev['total_revenue'], color=color_rev, alpha=0.3, label='Daily Revenue ($)')
     ax1.plot(df_rev['order_date'], df_rev['revenue_7d_ma'], color=color_rev, linewidth=2.4, label='7-Day Rolling Revenue ($)')
@@ -163,17 +155,13 @@ def render_revenue_trends_chart():
     ax1.tick_params(axis='y', labelcolor=color_rev)
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
 
-    # Plot AOV on secondary axis
     ax2 = ax1.twinx()
     color_aov = '#ff7f0e'
     ax2.plot(df_rev['order_date'], df_rev['aov_7d_ma'], color=color_aov, linewidth=2.0, linestyle='--', label='7-Day Rolling AOV ($)')
     ax2.set_ylabel('Average Order Value ($)', color=color_aov, fontweight='bold')
     ax2.tick_params(axis='y', labelcolor=color_aov)
 
-    # Title & Legend
     ax1.set_title('Daily Revenue Trends & Average Order Value (AOV)')
-    
-    # Combined legend
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', frameon=True)
@@ -183,11 +171,9 @@ def render_revenue_trends_chart():
     output_path = SCREENSHOTS_DIR / "dashboard_revenue.png"
     plt.savefig(output_path, dpi=300)
     plt.close()
-    print(f"Saved: {output_path}")
 
 
 def render_full_dashboard():
-    """Render combined multi-panel dashboard mockup (Metabase layout)."""
     conn = get_db_connection()
     df_cohort = pd.read_sql("select cohort_month::text, month_number, retention_pct, cohort_size from public_marts.monthly_cohort_retention order by cohort_month, month_number;", conn)
     df_funnel = pd.read_sql("select funnel_step, session_count, step_conversion_pct, overall_conversion_pct from public_marts.funnel_summary order by funnel_step_order;", conn)
@@ -197,11 +183,8 @@ def render_full_dashboard():
     df_rev['order_date'] = pd.to_datetime(df_rev['order_date'])
     df_rev['revenue_7d_ma'] = df_rev['total_revenue'].rolling(window=7, min_periods=1).mean()
 
-    # Create 2x2 grid dashboard
     fig = plt.figure(figsize=(16, 11), dpi=300)
     fig.patch.set_facecolor('#f8fafc')
-
-    # Header title
     fig.suptitle("E-Commerce Analytics Pipeline — Executive Metabase Dashboard", fontsize=18, fontweight='bold', y=0.98, color='#0f172a')
 
     # Panel 1: Revenue Trends
@@ -258,7 +241,7 @@ def render_full_dashboard():
     ax4.set_facecolor('#ffffff')
     palette = sns.color_palette("Set2", len(df_cohort['cohort_month'].unique()))
     for idx, (cohort, group) in enumerate(df_cohort.groupby('cohort_month')):
-        if idx in [0, 2, 5, 8, 10]:  # Highlight key quarterly cohorts for clarity
+        if idx in [0, 2, 5, 8, 10]:
             ax4.plot(
                 group['month_number'],
                 group['retention_pct'],
@@ -278,7 +261,6 @@ def render_full_dashboard():
     output_path = SCREENSHOTS_DIR / "dashboard_full.png"
     plt.savefig(output_path, dpi=300)
     plt.close()
-    print(f"Saved: {output_path}")
 
 
 if __name__ == "__main__":
@@ -286,3 +268,4 @@ if __name__ == "__main__":
     render_funnel_chart()
     render_revenue_trends_chart()
     render_full_dashboard()
+    print("Dashboard screenshots rendered in screenshots/.")

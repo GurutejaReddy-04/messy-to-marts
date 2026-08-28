@@ -1,10 +1,6 @@
 /*
-Custom singular test: test_first_purchase_after_signup
-
-Validation rule:
-- Asserts that a customer's computed first_purchase_date in int_user_first_purchase
-  is never earlier than their initial signup_date in stg_users.
-- Catches timezone conversion errors, inverted join keys, or corrupted transaction timestamps.
+Asserts first_purchase_date is not earlier than signup_date.
+Catches time-traveling purchases from clock drift or bad timezone casting.
 */
 
 with first_purchases as (

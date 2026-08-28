@@ -2,8 +2,11 @@ name: 'analytics_pipeline'
 version: '1.0.0'
 config-version: 2
 
-# Profile connection name
 profile: 'analytics_pipeline'
+
+# Project variables
+vars:
+  author: "Guruteja Reddy N"
 
 # Path configurations
 model-paths: ["models"]

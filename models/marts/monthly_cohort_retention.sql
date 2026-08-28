@@ -1,18 +1,15 @@
 /*
-Mart model computing monthly user cohort retention.
+Marts: Monthly Cohort Retention
 
 Business rationale:
-- Groups users into monthly acquisition cohorts based on their initial signup date.
-- Tracks repeat purchasing activity over subsequent calendar months (month 0, month 1, month 2...).
-- Calculates the percentage of cohort customers remaining active in each period,
-  answering core business questions regarding product retention curves and customer lifecycle decay.
+- Track customer purchasing retention across monthly acquisition cohorts.
+- Active is defined as placing >= 1 valid order in a given month.
 */
 
 with user_cohorts as (
     select
         user_id,
         signup_date,
-        -- Truncate registration date to first day of signup month
         date_trunc('month', signup_date)::date as cohort_month
     from {{ ref('int_user_first_purchase') }}
 ),
@@ -45,7 +42,6 @@ user_cohort_months as (
         user_id,
         cohort_month,
         activity_month,
-        -- Calculate elapsed months from cohort month to activity month
         (
             (extract(year from activity_month) - extract(year from cohort_month)) * 12
             + (extract(month from activity_month) - extract(month from cohort_month))
@@ -71,7 +67,6 @@ cohort_retention_joined as (
         cohort_sizes.cohort_size,
         cohort_activity_aggregated.month_number,
         cohort_activity_aggregated.active_users,
-        -- Calculate retention rate as percentage of initial cohort size
         round(
             (cohort_activity_aggregated.active_users::numeric / cohort_sizes.cohort_size::numeric) * 100.0,
             2

@@ -1,13 +1,10 @@
 /*
-Staging model for user accounts.
+Staging: User Accounts
 
-Deduplication strategy:
-- User registrations contain ~4% typo-variant duplicates where the same user re-signed up
-  with dots omitted or domain typos (e.g. gmial.com, yaho.com).
-- We normalize emails by stripping dots from the local part and standardizing domain typo variants.
-- We partition by normalized email and retain the earliest registration record (user_account_rank = 1).
-- Un-cohortable rows missing signup_date (~1.5%) are filtered out since downstream retention models require valid signup cohorts.
-- Missing country values are preserved as NULL because country is optional and nullable by design.
+Cleaning logic:
+- People struggle to spell 'gmail' and 'yahoo'. Strip dots from local-part and fix common domain typos.
+- Retain the earliest valid registration per individual (rank = 1).
+- Drop rows missing signup_date (cannot cohort un-dated users). Country nulls are kept as-is.
 */
 
 with raw_users as (
@@ -27,7 +24,7 @@ normalized_users as (
         first_name,
         last_name,
         raw_email,
-        -- Standardize known domain typos and remove dot variations in local email part
+        -- Standardize domain typos and strip local-part dots
         case
             when split_part(raw_email, '@', 2) in ('gmial.com', 'gmai.com', 'gamil.com')
                 then split_part(replace(raw_email, '.', ''), '@', 1) || '@gmail.com'
@@ -55,7 +52,6 @@ deduplicated_users as (
         country,
         signup_at,
         signup_date,
-        -- Prioritize the earliest signup timestamp for duplicate registrations
         row_number() over (
             partition by normalized_email
             order by
@@ -63,7 +59,6 @@ deduplicated_users as (
                 user_id asc
         ) as user_account_rank
     from normalized_users
-    -- Filter out un-cohortable records missing signup date
     where signup_date is not null
 )
 

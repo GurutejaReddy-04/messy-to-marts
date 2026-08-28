@@ -1,12 +1,9 @@
 /*
-Intermediate model computing initial purchase conversion and customer order aggregations.
+Intermediate: User Lifetime & First Purchase Metrics
 
 Business rationale:
-- Computes each customer's first purchase timestamp and date to serve as the baseline
-  for downstream cohort retention modeling in the marts layer.
-- Enriches user dimension with lifetime order counts and lifetime gross merchandise value (GMV).
-- Inner joins to stg_users to anchor metrics to validated user accounts, naturally isolating
-  orphaned raw orders until account resolution occurs.
+- Computes baseline acquisition and first-purchase timestamps for cohort retention marts.
+- Left joins against clean users so non-purchasers are tracked with zero spend and order counts.
 */
 
 with users as (
@@ -35,7 +32,6 @@ user_orders_ranked as (
         ordered_at,
         order_date,
         order_value,
-        -- Rank orders chronologically to isolate the first purchase event
         row_number() over (
             partition by user_id
             order by

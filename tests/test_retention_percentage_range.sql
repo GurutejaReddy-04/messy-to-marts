@@ -1,9 +1,5 @@
 /*
-Custom singular test: test_retention_percentage_range
-
-Validation rule:
-- Asserts that retention_pct in monthly_cohort_retention strictly falls between 0 and 100 inclusive.
-- Catches cohort calculation bugs, duplicate active user counts, or ratio formula invert errors.
+Asserts retention_pct strictly falls within [0.00, 100.00]%.
 */
 
 select

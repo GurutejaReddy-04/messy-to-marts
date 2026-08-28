@@ -1,10 +1,6 @@
 /*
-Custom singular test: test_session_duration_24h
-
-Validation rule:
-- Asserts that session duration calculated in int_sessionized_events never exceeds
-  a sane upper bound of 24 hours (86,400 seconds) and is non-negative.
-- Catches sessionization logic bugs, inverted timestamps, or cross-session timestamp contamination.
+Asserts session duration is between 0 and 86,400 seconds.
+If a session lasts more than 24 hours, either the user fell asleep at their desk or tracking broke.
 */
 
 select

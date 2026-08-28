@@ -1,9 +1,5 @@
 /*
-Custom singular test: test_revenue_non_negative
-
-Validation rule:
-- Asserts that daily total_revenue and average_order_value in fct_revenue_trends are never negative.
-- Catches accidental inclusion of negative order glitches, improper refunds, or aggregation errors.
+Asserts daily total_revenue and average_order_value are non-negative.
 */
 
 select

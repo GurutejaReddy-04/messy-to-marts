@@ -1,11 +1,9 @@
 /*
-Intermediate model grouping clickstream events into session-level aggregates.
+Intermediate: Sessionized Clickstream Events
 
 Business rationale:
-- Web activity occurs in discrete sessions; analyzing funnel progression and user journey drop-offs
-  requires aggregating individual page views, cart additions, and purchases per session.
-- Calculates session duration in seconds and flags the furthest conversion step reached
-  to simplify downstream funnel aggregation models in the marts layer.
+- Collapse raw event pings into distinct user sessions.
+- Compute session duration and deepest funnel milestone achieved.
 */
 
 with events as (
@@ -47,7 +45,6 @@ session_metrics as (
         session_date,
         session_start_at,
         session_end_at,
-        -- Calculate total session duration in seconds from first to last event
         extract(epoch from (session_end_at - session_start_at))::int as session_duration_seconds,
         total_events_count,
         page_view_count,
@@ -55,7 +52,6 @@ session_metrics as (
         purchase_count,
         add_to_cart_count > 0 as has_cart_add,
         purchase_count > 0 as has_purchase,
-        -- Determine deepest funnel milestone achieved in session
         case
             when purchase_count > 0 then 'purchase'
             when add_to_cart_count > 0 then 'add_to_cart'

@@ -1,10 +1,6 @@
 /*
-Custom singular test: test_funnel_monotonic
-
-Validation rule:
-- Asserts that session conversion counts across funnel stages are monotonically non-increasing:
-  purchase_session_count <= cart_session_count <= page_view_session_count.
-- Catches event counting discrepancies, invalid funnel step definitions, or double-counting anomalies.
+Asserts funnel conversion counts are monotonically non-increasing:
+purchase_sessions <= cart_sessions <= page_view_sessions.
 */
 
 with funnel_steps as (
