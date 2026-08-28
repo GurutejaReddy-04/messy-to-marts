@@ -25,8 +25,8 @@ with orders as (
         order_status
     from {{ ref('stg_orders') }}
     {% if is_incremental() %}
-    -- Incrementally process only dates that meet or exceed the highest date in the existing fact table
-    where order_date >= (select max(order_date) from {{ this }})
+        -- Incrementally process only dates that meet or exceed the highest date in the existing fact table
+        where order_date >= (select max(order_date) from {{ this }})
     {% endif %}
 ),
 

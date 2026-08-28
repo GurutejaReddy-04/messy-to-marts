@@ -53,14 +53,8 @@ session_metrics as (
         page_view_count,
         add_to_cart_count,
         purchase_count,
-        case
-            when add_to_cart_count > 0 then true
-            else false
-        end as has_cart_add,
-        case
-            when purchase_count > 0 then true
-            else false
-        end as has_purchase,
+        add_to_cart_count > 0 as has_cart_add,
+        purchase_count > 0 as has_purchase,
         -- Determine deepest funnel milestone achieved in session
         case
             when purchase_count > 0 then 'purchase'

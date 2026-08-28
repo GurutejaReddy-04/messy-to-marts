@@ -77,10 +77,7 @@ joined_user_purchase_metrics as (
         first_orders.first_purchase_value,
         coalesce(aggregates.total_orders_count, 0) as total_orders_count,
         coalesce(aggregates.total_lifetime_value, 0.00) as total_lifetime_value,
-        case
-            when aggregates.first_purchase_at is not null then true
-            else false
-        end as has_purchased
+        aggregates.first_purchase_at is not null as has_purchased
     from users
     left join user_order_aggregates as aggregates
         on users.user_id = aggregates.user_id

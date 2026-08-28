@@ -35,8 +35,9 @@ staged_events as (
         page_url
     from raw_events
     -- Guard against malformed tracking events missing user or session identifiers
-    where user_id is not null
-      and session_id is not null
+    where
+        user_id is not null
+        and session_id is not null
 )
 
 select
