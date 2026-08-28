@@ -8,9 +8,9 @@ A production-grade analytics engineering pipeline that ingests raw transactional
 
 - **End-to-End Data Lifecycle:** Ingests raw multi-table e-commerce data with real-world messiness (typo-variant user duplicates, late-arriving dimensions, conflicting retry submissions, negative entry glitches, non-UTC timestamps), cleanses and transforms it through staging and intermediate layers, and materializes production-ready marts.
 - **Incremental Data Modeling:** Implements an incremental merge fact model (`fct_revenue_trends`) that scales efficiently with daily transaction volume without requiring full table rebuilds.
-- **Robust Quality Governance:** Employs 62 automated tests (42 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds ($[0, 100]\%$), non-negative revenue, session durations ($\le 24$h), and monotonic funnel progression ($\text{purchases} \le \text{cart adds} \le \text{page views}$).
+- **Robust Quality Governance:** Employs 62 automated tests (42 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), non-negative revenue, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
 - **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflow executes full end-to-end builds, tests, and `sqlfluff` style linting against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC.
-- **Schema Change Isolation:** Proved architectural resilience through a live maintenance demonstration: upstream column rename from `order_value` $\rightarrow$ `order_amount` was fully adapted in 1 line in `stg_orders` with zero breaking changes propagated downstream.
+- **Schema Change Isolation:** Proved architectural resilience through a live maintenance demonstration: upstream column rename from `order_value` → `order_amount` was fully adapted in 1 line in `stg_orders` with zero breaking changes propagated downstream.
 
 ---
 
@@ -175,12 +175,12 @@ The test suite enforces 62 data validation tests defined in [`TEST_PLAN.md`](TES
    - Not-null validation on downstream dependencies (`signup_date`, `order_date`, `session_id`, `event_at`).
    - Missing fields allowed by design (`country`) are intentionally not asserted as not-null.
 2. **Intermediate Layer (23 generic + 2 custom singular tests):**
-   - [`tests/test_session_duration_24h.sql`](tests/test_session_duration_24h.sql): Asserts session duration in `int_sessionized_events` is non-negative and $\le 86,400$ seconds (24 hours).
+   - [`tests/test_session_duration_24h.sql`](tests/test_session_duration_24h.sql): Asserts session duration in `int_sessionized_events` is non-negative and ≤ 86,400 seconds (24 hours).
    - [`tests/test_first_purchase_after_signup.sql`](tests/test_first_purchase_after_signup.sql): Asserts that `first_purchase_date` in `int_user_first_purchase` is never earlier than the customer's `signup_date`.
 3. **Marts Layer (15 generic + 3 custom singular tests):**
    - [`tests/test_revenue_non_negative.sql`](tests/test_revenue_non_negative.sql): Asserts `total_revenue` and `average_order_value` in `fct_revenue_trends` are non-negative.
-   - [`tests/test_retention_percentage_range.sql`](tests/test_retention_percentage_range.sql): Asserts `retention_pct` in `monthly_cohort_retention` falls within $[0.00, 100.00]\%$.
-   - [`tests/test_funnel_monotonic.sql`](tests/test_funnel_monotonic.sql): Asserts conversion counts are monotonically non-increasing ($\text{purchases} \le \text{cart additions} \le \text{page views}$).
+   - [`tests/test_retention_percentage_range.sql`](tests/test_retention_percentage_range.sql): Asserts `retention_pct` in `monthly_cohort_retention` falls within [0.00, 100.00]%.
+   - [`tests/test_funnel_monotonic.sql`](tests/test_funnel_monotonic.sql): Asserts conversion counts are monotonically non-increasing (purchases ≤ cart additions ≤ page views).
    - `accepted_values` on `funnel_summary.funnel_step` (`['page_view', 'add_to_cart', 'purchase']`).
 
 ---
@@ -207,7 +207,7 @@ Key metrics extracted directly from the marts tables:
    - **Add-to-Cart Conversion:** 1,512 sessions added items to cart (32.36% step conversion rate).
    - **Purchase Checkout Conversion:** 581 sessions completed an order (38.43% step conversion from cart; 12.44% overall conversion from page view).
 2. **Cohort Retention Patterns (`monthly_cohort_retention`):**
-   - January 2023 Cohort ($N = 124$): Month 0 retention is 41.13%, rising to a repeat purchase peak of 61.29% in Month 1, gradually tapering to 36.29% in Month 3, 25.00% in Month 4, and 4.03% by Month 8.
+   - January 2023 Cohort (N = 124): Month 0 retention is 41.13%, rising to a repeat purchase peak of 61.29% in Month 1, gradually tapering to 36.29% in Month 3, 25.00% in Month 4, and 4.03% by Month 8.
 3. **Revenue Trends & Incremental Scaling (`fct_revenue_trends`):**
    - Daily gross revenue shows steady baseline performance with elevated transaction volume on weekends (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday peaks.
 
@@ -236,14 +236,14 @@ The executive dashboard consolidates key business metrics into a unified view:
 
 #### 2. E-Commerce Conversion Funnel
 - **Source Table:** `public_marts.funnel_summary`
-- **Axes:** X-axis = `funnel_step` (`page_view` $\rightarrow$ `add_to_cart` $\rightarrow$ `purchase`), Y-axis = `session_count`.
+- **Axes:** X-axis = `funnel_step` (`page_view` → `add_to_cart` → `purchase`), Y-axis = `session_count`.
 - **Business Insight:** Identifies friction in user purchasing flows. Of 4,672 browsing sessions, 32.36% (1,512 sessions) add items to cart, and 38.43% of cart sessions (581 sessions) convert into purchases, representing a 12.44% overall end-to-end conversion rate.
 
 ![Conversion Funnel](screenshots/dashboard_funnel.png)
 
 #### 3. Daily Revenue Trends & Average Order Value
 - **Source Table:** `public_marts.fct_revenue_trends`
-- **Axes:** X-axis = `order_date`, Primary Y-axis = `total_revenue` ($), Secondary Y-axis = `average_order_value` ($).
+- **Axes:** X-axis = `order_date`, Primary Y-axis = `total_revenue` ($ USD), Secondary Y-axis = `average_order_value` ($ USD).
 - **Business Insight:** Visualizes gross transaction velocity, highlighting weekend purchasing spikes (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday sales surges. Built as an incremental model for low-latency updates.
 
 ![Revenue Trends](screenshots/dashboard_revenue.png)
