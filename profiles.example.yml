@@ -1,3 +1,7 @@
+# Example dbt profiles configuration for PostgreSQL warehouse connection.
+# Copy this file to 'profiles.yml' or '~/.dbt/profiles.yml' and customize credentials as needed.
+# Supports dynamic override via environment variables (DB_HOST, DB_USER, DB_PASSWORD, DB_PORT, DB_NAME).
+
 analytics_pipeline:
   target: dev
   outputs:

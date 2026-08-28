@@ -110,7 +110,17 @@ Alternatively, install dependencies via `pip`:
 pip install dbt-postgres psycopg2-binary sqlfluff Faker pytest pyyaml matplotlib seaborn pillow
 ```
 
-### 2. Database & Raw Data Ingestion
+### 2. Configure dbt Profile
+
+Copy the template configuration file to `profiles.yml`:
+
+```bash
+cp profiles.example.yml profiles.yml
+```
+
+Connection parameters can be customized via environment variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) or directly within `profiles.yml`.
+
+### 3. Database & Raw Data Ingestion
 
 Ensure PostgreSQL is running locally, then initialize the database and load the raw CSV files:
 
@@ -118,9 +128,7 @@ Ensure PostgreSQL is running locally, then initialize the database and load the 
 python load_raw_data.py
 ```
 
-Connection parameters can be customized via environment variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`).
-
-### 3. Verify Connection
+### 4. Verify Connection
 
 ```bash
 dbt debug --profiles-dir .

@@ -1,10 +1,12 @@
-# dbt build & docs artifacts
+# dbt build, profiles & docs artifacts
 target/
 dbt_packages/
 logs/
 *.log
 dbt.log
 .user.yml
+profiles.yml
+!profiles.example.yml
 
 # Python caches & virtual environments
 __pycache__/

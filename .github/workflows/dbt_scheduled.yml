@@ -41,6 +41,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install dbt-postgres psycopg2-binary
 
+      - name: Configure dbt profiles
+        run: cp profiles.example.yml profiles.yml
+
       - name: Load raw data into PostgreSQL warehouse
         run: |
           python load_raw_data.py
