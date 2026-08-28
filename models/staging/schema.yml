@@ -1,0 +1,119 @@
+version: 2
+
+models:
+  - name: stg_users
+    description: >
+      Staging model for user accounts. Cleans and standardizes raw user records by deduplicating
+      typo-variant email accounts (retaining the earliest registration per normalized email) and
+      filtering out un-cohortable records with missing signup dates. Country remains nullable by design.
+    columns:
+      - name: user_id
+        description: "Primary key identifier for the deduplicated user account."
+        tests:
+          - unique
+          - not_null
+
+      - name: first_name
+        description: "First name of the user."
+
+      - name: last_name
+        description: "Last name of the user."
+
+      - name: email
+        description: "Email address associated with the primary user registration."
+        tests:
+          - not_null
+
+      - name: country
+        description: "Country code of the user (nullable by design for ~1.5% of records)."
+
+      - name: signup_at
+        description: "Exact timestamp of initial user registration."
+        tests:
+          - not_null
+
+      - name: signup_date
+        description: "Calendar date of user registration, required for downstream cohort retention models."
+        tests:
+          - not_null
+
+
+  - name: stg_orders
+    description: >
+      Staging model for transactional orders. Resolves conflicting duplicate order_ids caused by
+      network retries (prioritizing completed status and latest attempt) and removes invalid
+      negative or zero order amounts. Orphaned user IDs are preserved for downstream analysis.
+    columns:
+      - name: order_id
+        description: "Primary transaction identifier, deduplicated across retry submissions."
+        tests:
+          - unique
+          - not_null
+
+      - name: user_id
+        description: "Foreign key referencing user account. May contain late-arriving dimensions."
+        tests:
+          - not_null
+
+      - name: ordered_at
+        description: "Order timestamp recorded in UTC ISO 8601 standard format."
+        tests:
+          - not_null
+
+      - name: order_date
+        description: "Calendar date of transaction, used for revenue time-series aggregation."
+        tests:
+          - not_null
+
+      - name: order_value
+        description: "Validated positive monetary transaction value."
+        tests:
+          - not_null
+
+      - name: order_status
+        description: "Order status: completed, pending, returned, or cancelled."
+        tests:
+          - not_null
+
+
+  - name: stg_events
+    description: >
+      Staging model for clickstream web behavioral events. Preserves raw event volume while casting
+      local client timestamps and filtering out malformed events missing session identifiers.
+    columns:
+      - name: event_id
+        description: "Primary identifier for the clickstream event record."
+        tests:
+          - unique
+          - not_null
+
+      - name: user_id
+        description: "Identifier for the browsing user. May contain untracked visitor keys."
+        tests:
+          - not_null
+
+      - name: session_id
+        description: "Session identifier grouping sequential page views and funnel actions."
+        tests:
+          - not_null
+
+      - name: event_name
+        description: "Action type within the conversion funnel (page_view, add_to_cart, purchase)."
+        tests:
+          - not_null
+
+      - name: event_at
+        description: "Event timestamp in local client time (note intentional mismatch with UTC orders)."
+        tests:
+          - not_null
+
+      - name: event_date
+        description: "Calendar date of the event in local client time."
+        tests:
+          - not_null
+
+      - name: device_type
+        description: "Client device category (mobile, desktop, tablet)."
+
+      - name: page_url
+        description: "URL path visited by the user."
