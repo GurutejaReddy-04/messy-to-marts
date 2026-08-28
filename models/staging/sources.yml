@@ -1,0 +1,55 @@
+version: 2
+
+sources:
+  - name: raw
+    database: analytics_pipeline
+    schema: raw
+    description: "Raw transactional, behavioral, and user dimension tables loaded directly from synthetic CSV extracts."
+    tables:
+      - name: users
+        description: "Raw simulated user registrations with intentional typo-variant duplicates, missing signup dates, and null countries."
+        columns:
+          - name: user_id
+            description: "Primary key identifier for the user record (note: duplicate accounts have distinct user_ids)."
+          - name: first_name
+            description: "First name of the user."
+          - name: last_name
+            description: "Last name of the user."
+          - name: email
+            description: "Email address containing intentional typo variants for duplicate accounts."
+          - name: country
+            description: "Country code (nullable for ~1.5% of rows)."
+          - name: signup_date
+            description: "Raw registration date string (nullable for ~1.5% of rows)."
+
+      - name: orders
+        description: "Raw transactional purchase records with UTC ISO 8601 timestamps, late-arriving dimensions, and retry duplicates."
+        columns:
+          - name: order_id
+            description: "Primary transaction identifier (contains ~1% conflicting retry duplicates)."
+          - name: user_id
+            description: "Foreign key referencing users table (~1.5% are late-arriving/orphaned keys)."
+          - name: order_date
+            description: "Order timestamp recorded in UTC ISO 8601 format."
+          - name: order_value
+            description: "Monetary transaction total (contains ~1.09% negative or zero values due to entry errors and cancelled retries)."
+          - name: order_status
+            description: "Status of the order: completed, pending, returned, or cancelled."
+
+      - name: events
+        description: "Raw web clickstream event log recorded with local timestamps (intentional timezone mismatch with orders)."
+        columns:
+          - name: event_id
+            description: "Unique event record identifier."
+          - name: user_id
+            description: "Foreign key referencing user account (~1.0% orphaned)."
+          - name: session_id
+            description: "Session identifier grouping continuous browsing activities."
+          - name: event_name
+            description: "Action type: page_view, add_to_cart, or purchase."
+          - name: event_timestamp
+            description: "Event timestamp in local time (unadjusted for UTC)."
+          - name: device_type
+            description: "Client device type: mobile, desktop, or tablet."
+          - name: page_url
+            description: "URL path where the event occurred."

@@ -14,7 +14,6 @@ env/
 
 # Env / secrets
 .env
-profiles.yml
 
 # OS
 .DS_Store

@@ -1,0 +1,13 @@
+analytics_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      user: "{{ env_var('DBT_USER', 'postgres') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'postgres') }}"
+      port: "{{ env_var('DBT_PORT', '5432') | as_number }}"
+      dbname: "{{ env_var('DBT_DBNAME', 'analytics_pipeline') }}"
+      schema: "{{ env_var('DBT_SCHEMA', 'public') }}"
+      threads: 4
+      keepalives_idle: 0
