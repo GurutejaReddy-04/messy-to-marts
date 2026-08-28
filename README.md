@@ -86,7 +86,7 @@ The raw dataset reflects multi-year transactional and clickstream behaviors gene
 | | | Funnel progression | `page_view` (11,997), `add_to_cart` (2,422), `purchase` (581) |
 | | | Timestamp standard | Local time (`YYYY-MM-DD HH:MM:SS`), unadjusted for UTC |
 
-\* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_amount to $0.00 (10 rows).*
+* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_amount to 0.00 USD (10 rows).*
 
 ---
 
@@ -243,7 +243,7 @@ The executive dashboard consolidates key business metrics into a unified view:
 
 #### 3. Daily Revenue Trends & Average Order Value
 - **Source Table:** `public_marts.fct_revenue_trends`
-- **Axes:** X-axis = `order_date`, Primary Y-axis = `total_revenue` ($ USD), Secondary Y-axis = `average_order_value` ($ USD).
+- **Axes:** X-axis = `order_date`, Primary Y-axis = `total_revenue` (USD), Secondary Y-axis = `average_order_value` (USD).
 - **Business Insight:** Visualizes gross transaction velocity, highlighting weekend purchasing spikes (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday sales surges. Built as an incremental model for low-latency updates.
 
 ![Revenue Trends](screenshots/dashboard_revenue.png)
