@@ -26,16 +26,11 @@ cohort_sizes as (
         cohort_month
 ),
 
-user_monthly_orders as (
+user_activities as (
     select
         orders.user_id,
         user_cohorts.cohort_month,
-        date_trunc('month', orders.order_date)::date as activity_month,
-        -- Compute elapsed months between acquisition cohort month and activity month
-        (
-            (extract(year from date_trunc('month', orders.order_date)) - extract(year from user_cohorts.cohort_month)) * 12
-            + (extract(month from date_trunc('month', orders.order_date)) - extract(month from user_cohorts.cohort_month))
-        )::int as month_number
+        date_trunc('month', orders.order_date)::date as activity_month
     from {{ ref('stg_orders') }} as orders
     inner join user_cohorts
         on orders.user_id = user_cohorts.user_id
@@ -45,12 +40,25 @@ user_monthly_orders as (
         date_trunc('month', orders.order_date)::date
 ),
 
+user_cohort_months as (
+    select
+        user_id,
+        cohort_month,
+        activity_month,
+        -- Calculate elapsed months from cohort month to activity month
+        (
+            (extract(year from activity_month) - extract(year from cohort_month)) * 12
+            + (extract(month from activity_month) - extract(month from cohort_month))
+        )::int as month_number
+    from user_activities
+),
+
 cohort_activity_aggregated as (
     select
         cohort_month,
         month_number,
         count(distinct user_id) as active_users
-    from user_monthly_orders
+    from user_cohort_months
     where month_number >= 0
     group by
         cohort_month,
