@@ -193,7 +193,38 @@ Key metrics extracted directly from the marts tables:
 
 ## BI Dashboard (Metabase)
 
-*(Placeholder for Phase 9: Metabase connection details, queries, and dashboard screenshots).*
+The business intelligence layer connects to PostgreSQL on `localhost:5432` (database `analytics_pipeline`, user `postgres`) filtered strictly to the **`public_marts`** schema. Pointing BI tools exclusively to the marts layer ensures stakeholders only query curated, tested, documented fact and dimension tables, preventing exposure of raw or un-cleansed upstream data.
+
+### Executive Dashboard Overview
+
+The executive dashboard consolidates key business metrics into a unified view:
+
+![Executive Dashboard](screenshots/dashboard_full.png)
+
+---
+
+### Key Dashboard Visualizations
+
+#### 1. Customer Cohort Retention Curves
+- **Source Table:** `public_marts.monthly_cohort_retention`
+- **Axes:** X-axis = `month_number` (0 to 11), Y-axis = `retention_pct` (0% to 100%), Series = `cohort_month`.
+- **Business Insight:** Tracks customer loyalty across acquisition cohorts over time. The January 2023 cohort achieves a peak repeat purchase rate of 61.29% in Month 1, declining to 36.29% in Month 3 and 4.03% in Month 8.
+
+![Cohort Retention Curves](screenshots/dashboard_cohort.png)
+
+#### 2. E-Commerce Conversion Funnel
+- **Source Table:** `public_marts.funnel_summary`
+- **Axes:** X-axis = `funnel_step` (`page_view` $\rightarrow$ `add_to_cart` $\rightarrow$ `purchase`), Y-axis = `session_count`.
+- **Business Insight:** Identifies friction in user purchasing flows. Of 4,672 browsing sessions, 32.36% (1,512 sessions) add items to cart, and 38.43% of cart sessions (581 sessions) convert into purchases, representing a 12.44% overall end-to-end conversion rate.
+
+![Conversion Funnel](screenshots/dashboard_funnel.png)
+
+#### 3. Daily Revenue Trends & Average Order Value
+- **Source Table:** `public_marts.fct_revenue_trends`
+- **Axes:** X-axis = `order_date`, Primary Y-axis = `total_revenue` ($), Secondary Y-axis = `average_order_value` ($).
+- **Business Insight:** Visualizes gross transaction velocity, highlighting weekend purchasing spikes (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday sales surges. Built as an incremental model for low-latency updates.
+
+![Revenue Trends](screenshots/dashboard_revenue.png)
 
 ---
 
