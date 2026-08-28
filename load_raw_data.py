@@ -6,11 +6,13 @@ from psycopg2 import sql
 
 import config
 
-DB_NAME = "analytics_pipeline"
-DB_USER = "postgres"
-DB_PASSWORD = "postgres"
-DB_HOST = "localhost"
-DB_PORT = "5432"
+import os
+
+DB_NAME = os.getenv("DB_NAME", os.getenv("DBT_DBNAME", "analytics_pipeline"))
+DB_USER = os.getenv("DB_USER", os.getenv("DBT_USER", "postgres"))
+DB_PASSWORD = os.getenv("DB_PASSWORD", os.getenv("DBT_PASSWORD", "postgres"))
+DB_HOST = os.getenv("DB_HOST", os.getenv("DBT_HOST", "localhost"))
+DB_PORT = os.getenv("DB_PORT", os.getenv("DBT_PORT", "5432"))
 
 
 def setup_database_and_load_data() -> None:
