@@ -1,4 +1,4 @@
-# End-to-End Analytics Pipeline with SQL, dbt & BI Dashboard
+# messy-to-marts: End-to-End Analytics Pipeline with SQL, dbt & BI Dashboard
 
 A production-grade analytics engineering pipeline that ingests raw transactional and clickstream event streams, standardizes and transforms data across a three-tier dbt architecture in PostgreSQL, enforces 62 automated data quality and business logic tests, runs automated continuous integration (CI) and nightly scheduled builds via GitHub Actions, and serves curated analytical marts directly to an executive Metabase BI dashboard.
 
