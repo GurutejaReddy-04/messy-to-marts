@@ -1,0 +1,99 @@
+version: 2
+
+models:
+  - name: monthly_cohort_retention
+    description: >
+      Mart model computing monthly user cohort retention matrices.
+      Groups customers by acquisition signup month and evaluates active purchasing participation
+      across subsequent elapsed months (month 0 to month N).
+    columns:
+      - name: cohort_month
+        description: "First day of the customer acquisition cohort signup month."
+        tests:
+          - not_null
+
+      - name: cohort_size
+        description: "Total count of unique customers acquired in the cohort month."
+        tests:
+          - not_null
+
+      - name: month_number
+        description: "Elapsed month index since customer acquisition (0 = signup month, 1 = month +1, etc.)."
+        tests:
+          - not_null
+
+      - name: active_users
+        description: "Count of distinct cohort customers who completed at least one order in the activity month."
+        tests:
+          - not_null
+
+      - name: retention_pct
+        description: "Percentage of the original acquisition cohort remaining active in the given month."
+        tests:
+          - not_null
+
+
+  - name: funnel_summary
+    description: >
+      Mart model summarizing e-commerce conversion funnel progression.
+      Evaluates session transition rates from top-of-funnel browsing (page_view) through cart additions (add_to_cart)
+      to completed orders (purchase).
+    columns:
+      - name: funnel_step_order
+        description: "Sequential numerical order of the conversion milestone (1, 2, 3)."
+        tests:
+          - not_null
+
+      - name: funnel_step
+        description: "Conversion milestone name."
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['page_view', 'add_to_cart', 'purchase']
+
+      - name: session_count
+        description: "Total unique visitor sessions achieving this conversion milestone."
+        tests:
+          - not_null
+
+      - name: step_conversion_pct
+        description: "Conversion efficiency percentage relative to the immediately preceding funnel milestone."
+        tests:
+          - not_null
+
+      - name: overall_conversion_pct
+        description: "Cumulative conversion rate percentage relative to top-of-funnel page view sessions."
+        tests:
+          - not_null
+
+
+  - name: fct_revenue_trends
+    description: >
+      Incremental fact mart tracking daily gross transaction revenue, order volumes, unique customer counts,
+      and average order value (AOV). Built with incremental merge logic to scale with streaming/batched orders.
+    columns:
+      - name: order_date
+        description: "Primary key identifier representing the transaction calendar date."
+        tests:
+          - unique
+          - not_null
+
+      - name: total_revenue
+        description: "Gross merchandise value (GMV) generated on the calendar date."
+        tests:
+          - not_null
+
+      - name: order_count
+        description: "Total count of valid completed purchase transactions on the calendar date."
+        tests:
+          - not_null
+
+      - name: distinct_user_count
+        description: "Count of unique individual purchasing customers active on the calendar date."
+        tests:
+          - not_null
+
+      - name: average_order_value
+        description: "Mean gross order value (AOV) on the calendar date."
+        tests:
+          - not_null
