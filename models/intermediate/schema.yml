@@ -1,0 +1,125 @@
+version: 2
+
+models:
+  - name: int_user_first_purchase
+    description: >
+      Intermediate model computing first-purchase metrics and lifetime order aggregations per user.
+      Serves as the foundation for monthly cohort retention modeling and customer lifetime value (LTV) marts.
+    columns:
+      - name: user_id
+        description: "Primary key identifier for the user account."
+        tests:
+          - unique
+          - not_null
+
+      - name: signup_at
+        description: "Exact timestamp of initial user registration."
+        tests:
+          - not_null
+
+      - name: signup_date
+        description: "Calendar date of initial user registration."
+        tests:
+          - not_null
+
+      - name: first_purchase_at
+        description: "Exact timestamp of customer's first completed purchase (NULL if user has not yet purchased)."
+
+      - name: first_purchase_date
+        description: "Calendar date of customer's first purchase."
+
+      - name: first_purchase_order_id
+        description: "Order identifier of customer's initial purchase transaction."
+
+      - name: first_purchase_value
+        description: "Monetary amount of customer's initial purchase transaction."
+
+      - name: total_orders_count
+        description: "Total number of valid completed orders placed by the customer."
+        tests:
+          - not_null
+
+      - name: total_lifetime_value
+        description: "Cumulative gross merchandise value (GMV) spent by the customer."
+        tests:
+          - not_null
+
+      - name: has_purchased
+        description: "Boolean flag indicating whether the user has placed at least one purchase order."
+        tests:
+          - not_null
+
+
+  - name: int_sessionized_events
+    description: >
+      Intermediate model aggregating clickstream events into discrete user browsing sessions.
+      Computes session duration, event counts per conversion step, and furthest milestone achieved.
+    columns:
+      - name: session_id
+        description: "Primary key identifying each individual browsing session."
+        tests:
+          - unique
+          - not_null
+
+      - name: user_id
+        description: "User account identifier associated with the session."
+        tests:
+          - not_null
+
+      - name: device_type
+        description: "Client device type utilized during the browsing session."
+
+      - name: session_date
+        description: "Calendar date of session initiation (local time)."
+        tests:
+          - not_null
+
+      - name: session_start_at
+        description: "Timestamp of the first event recorded in the session."
+        tests:
+          - not_null
+
+      - name: session_end_at
+        description: "Timestamp of the final event recorded in the session."
+        tests:
+          - not_null
+
+      - name: session_duration_seconds
+        description: "Duration of the session in seconds from first to last recorded event."
+        tests:
+          - not_null
+
+      - name: total_events_count
+        description: "Total count of clickstream events within the session."
+        tests:
+          - not_null
+
+      - name: page_view_count
+        description: "Count of page view actions recorded in the session."
+        tests:
+          - not_null
+
+      - name: add_to_cart_count
+        description: "Count of add-to-cart actions recorded in the session."
+        tests:
+          - not_null
+
+      - name: purchase_count
+        description: "Count of purchase checkout events completed in the session."
+        tests:
+          - not_null
+
+      - name: has_cart_add
+        description: "Boolean flag indicating if at least one add-to-cart action occurred in the session."
+        tests:
+          - not_null
+
+      - name: has_purchase
+        description: "Boolean flag indicating if an order purchase conversion was completed in the session."
+        tests:
+          - not_null
+
+      - name: furthest_funnel_step
+        description: "Deepest conversion funnel stage reached (page_view, add_to_cart, purchase)."
+        tests:
+          - not_null
