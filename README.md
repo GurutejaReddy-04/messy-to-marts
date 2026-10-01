@@ -93,7 +93,7 @@ The raw dataset reflects multi-year transactional and clickstream behaviors gene
 
 ### Anomaly Design Rationale
 
-The synthetic data generation framework deliberately introduces real-world messiness to test data governance and transformation resilience. The specific frequencies were selected based on industry operational benchmarks:
+The synthetic data generation framework deliberately introduces real-world messiness to test data governance and transformation resilience. The specific frequencies were chosen as operational design benchmarks authored for this synthetic dataset:
 
 - **4.0% Typo-Variant User Duplicates:** Reflects typical customer signup friction across mobile and desktop forms (omitted dots in Gmail handles, common domain typos like `@gmial.com`, or accidental double-submissions).
 - **1.5% Null Registration Dates:** Simulates legacy user records migrated from early un-instrumented signup forms prior to strict timestamp capture.
@@ -159,7 +159,7 @@ Set your database password and optional host/port overrides in `.env` or your sh
 export DB_PASSWORD="your_secure_password"
 ```
 
-All operational scripts (`load_raw_data.py`, `render_dashboard_charts.py`) and dbt profiles resolve credentials through centralized environment configuration (`db_config.py`). If credentials are not supplied, operations fail immediately with an explicit, secure error message.
+All operational scripts (`load_raw_data.py`, `render_dashboard_charts.py`) and dbt profiles resolve credentials through centralized environment configuration (`db_config.py`). `db_config.py` automatically parses key-value pairs from `.env` on startup, while active shell environment variables take precedence. If credentials are not supplied, operations fail immediately with an explicit, secure error message.
 
 ### 3. Configure dbt Profile
 
@@ -255,7 +255,7 @@ The test suite enforces 62 data validation tests defined in [`TEST_PLAN.md`](TES
 
 - **GitHub Actions CI Workflow ([`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml)):**
   - Triggers on every `push` and `pull_request` to `main`/`master`.
-  - Provisions an ephemeral PostgreSQL 16 service container with isolated test credentials (`ci_test_ephemeral_password`).
+  - Provisions an ephemeral PostgreSQL 16 service container with an intentionally non-secret, fixed test credential (`ci_test_ephemeral_password`) scoped exclusively to the CI service container and job environment.
   - Ingests raw synthetic data via `load_raw_data.py`.
   - Executes granular, independently auditable workflow steps:
     1. Connection validation (`dbt debug`)
@@ -313,7 +313,7 @@ The business intelligence layer connects to PostgreSQL on `localhost:5432` (data
 
 ### Programmatic Dashboard Chart Rendering & Provenance
 
-To guarantee 100% offline reproducibility and automated visual documentation without requiring an active Metabase server instance, the repository provides a programmatic rendering script:
+To guarantee programmatic reproducibility and automated visual documentation without requiring an active Metabase server instance, the repository provides a programmatic rendering script:
 
 ```bash
 python render_dashboard_charts.py

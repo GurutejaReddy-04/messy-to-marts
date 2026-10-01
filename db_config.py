@@ -2,13 +2,38 @@
 
 Centralizes database connection parameter resolution from environment variables,
 ensuring consistent credential management, standard validation, and safe error handling
-across all pipeline execution scripts.
+across all pipeline execution scripts. Automatically loads local .env files if present.
 """
 
 import os
+from pathlib import Path
 import sys
 from typing import Any, Dict
 import psycopg2
+
+
+def load_dotenv(dotenv_path: Path | None = None) -> None:
+    """Load key-value pairs from a local .env file into os.environ if not already set."""
+    path = dotenv_path or (Path(__file__).parent / ".env")
+    if not path.is_file():
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key = key.strip()
+                val = val.strip().strip("'\"")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except Exception:
+        pass
+
+
+# Automatically load local .env if present
+load_dotenv()
 
 
 def get_db_credentials(require_password: bool = True) -> Dict[str, Any]:
