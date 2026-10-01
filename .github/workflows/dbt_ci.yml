@@ -17,6 +17,7 @@ jobs:
       DB_PORT: 5432
       DB_USER: postgres
       DB_PASSWORD: ci_test_ephemeral_password
+      DBT_PASSWORD: ci_test_ephemeral_password
       DB_NAME: analytics_pipeline
 
     services:

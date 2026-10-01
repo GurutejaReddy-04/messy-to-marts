@@ -10,7 +10,7 @@ analytics_pipeline:
       type: postgres
       host: "{{ env_var('DB_HOST', env_var('DBT_HOST', 'localhost')) }}"
       user: "{{ env_var('DB_USER', env_var('DBT_USER', 'postgres')) }}"
-      password: "{{ env_var('DB_PASSWORD', env_var('DBT_PASSWORD')) }}"
+      password: "{{ env_var('DB_PASSWORD', env_var('DBT_PASSWORD', '')) }}"
       port: "{{ env_var('DB_PORT', env_var('DBT_PORT', '5432')) | as_number }}"
       dbname: "{{ env_var('DB_NAME', env_var('DBT_DBNAME', 'analytics_pipeline')) }}"
       schema: "{{ env_var('DBT_SCHEMA', 'public') }}"
