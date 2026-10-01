@@ -1,10 +1,12 @@
-"""Centralized configuration for synthetic data generation.
+"""Centralized configuration for synthetic data generation and database connectivity.
 
-All constants, row counts, messiness rates, and date bounds are defined here
-to ensure consistency and avoid magic numbers across the pipeline.
+All constants, row counts, messiness rates, date bounds, and database connection utilities
+are defined or exposed here to ensure consistency across the pipeline.
 """
 
 from pathlib import Path
+import db_config
+from db_config import get_db_connection, get_db_credentials
 
 # Base Paths
 PROJECT_ROOT = Path(__file__).parent

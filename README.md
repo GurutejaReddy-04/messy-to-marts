@@ -1,5 +1,8 @@
 # messy-to-marts: End-to-End Analytics Pipeline with SQL, dbt & BI Dashboard
 
+[![dbt CI](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_ci.yml/badge.svg)](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_ci.yml)
+[![Scheduled dbt Run](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_scheduled.yml/badge.svg)](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_scheduled.yml)
+
 A production-grade analytics engineering pipeline that ingests raw transactional and clickstream event streams, standardizes and transforms data across a three-tier dbt architecture in PostgreSQL, enforces 62 automated data quality and business logic tests, runs automated continuous integration (CI) and nightly scheduled builds via GitHub Actions, and serves curated analytical marts directly to an executive Metabase BI dashboard.
 
 ---
@@ -8,8 +11,8 @@ A production-grade analytics engineering pipeline that ingests raw transactional
 
 - **End-to-End Data Lifecycle:** Ingests raw multi-table e-commerce data with real-world messiness (typo-variant user duplicates, late-arriving dimensions, conflicting retry submissions, negative entry glitches, non-UTC timestamps), cleanses and transforms it through staging and intermediate layers, and materializes production-ready marts.
 - **Incremental Data Modeling:** Implements an incremental merge fact model (`fct_revenue_trends`) that scales efficiently with daily transaction volume without requiring full table rebuilds.
-- **Robust Quality Governance:** Employs 62 automated tests (42 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), non-negative revenue, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
-- **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflow executes full end-to-end builds, tests, and `sqlfluff` style linting against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC.
+- **Robust Quality Governance:** Employs 62 automated tests (57 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), non-negative revenue, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
+- **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflows execute granular, auditable steps (connection validation, compilation, model execution, test assertions, and `sqlfluff` style linting) against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC.
 - **Schema Change Isolation:** Proved architectural resilience through a live maintenance demonstration: upstream column rename from `order_value` → `order_amount` was fully adapted in 1 line in `stg_orders` with zero breaking changes propagated downstream.
 
 ---
@@ -86,7 +89,39 @@ The raw dataset reflects multi-year transactional and clickstream behaviors gene
 | | | Funnel progression | `page_view` (11,997), `add_to_cart` (2,422), `purchase` (581) |
 | | | Timestamp standard | Local time (`YYYY-MM-DD HH:MM:SS`), unadjusted for UTC |
 
-* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_amount to 0.00 USD (10 rows).*
+\* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_amount to 0.00 USD (10 rows).*
+
+### Anomaly Design Rationale
+
+The synthetic data generation framework deliberately introduces real-world messiness to test data governance and transformation resilience. The specific frequencies were selected based on industry operational benchmarks:
+
+- **4.0% Typo-Variant User Duplicates:** Reflects typical customer signup friction across mobile and desktop forms (omitted dots in Gmail handles, common domain typos like `@gmial.com`, or accidental double-submissions).
+- **1.5% Null Registration Dates:** Simulates legacy user records migrated from early un-instrumented signup forms prior to strict timestamp capture.
+- **1.5% Null Geographic Country:** Reflects opt-out privacy settings or unresolved IP geolocation lookups in modern compliance frameworks.
+- **1.46% Orphaned Order User IDs:** Models late-arriving dimensions in decoupled event-driven architectures where transactional databases stream purchase events before CRM master identity replicas synchronize.
+- **1.09% Negative or Zero Order Amounts:** Simulates payment gateway refund processing glitches, test transactions mistakenly written to production logs, and promotional zero-dollar checkout orders.
+- **1.00% Conflicting Duplicate Orders:** Models checkout client retry race conditions when consumers double-click purchase buttons under network latency, generating identical transaction IDs with conflicting status or timestamps.
+- **1.15% Orphaned Event User IDs:** Simulates unauthenticated or anonymous visitor sessions that browse products before account registration or login.
+
+### Remediation Mapping Matrix
+
+Every injected anomaly is systematically handled at a specific transformation layer:
+
+| Injected Anomaly / Defect | Ingestion Table | Resolving Model | Transformation Technique & Resolution Strategy |
+| :--- | :--- | :--- | :--- |
+| **Typo Duplicate Users** | `raw.users` | `stg_users` | Window ranking (`ROW_NUMBER() OVER (PARTITION BY normalized_email ORDER BY signup_at ASC)`) keeps only the earliest registration. |
+| **Null `signup_date`** | `raw.users` | `stg_users` | Filtered out (`WHERE signup_date IS NOT NULL`) to preserve downstream cohort integrity; flagged as invalid registrations. |
+| **Conflicting Duplicate Orders** | `raw.orders` | `stg_orders` | Deduplicated via window ranking prioritizing `order_status = 'completed'` and latest attempt timestamp. |
+| **Negative / Zero Values** | `raw.orders` | `stg_orders` | Validated and filtered (`WHERE order_amount > 0.00`) to guarantee non-negative revenue calculations in marts. |
+| **Orphaned User Orders** | `raw.orders` | `int_user_first_purchase` | Preserved in staging; inner joined against cleansed `stg_users` so only verified accounts drive cohort metrics. |
+| **Timezone Inconsistencies** | `raw.events` | `stg_events` | Documented and cast to explicit client-local timestamps; day boundaries normalized for daily funnel aggregation. |
+
+### Intentional Residual Anomalies
+
+Certain real-world attributes are intentionally preserved downstream rather than artificially scrubbed:
+
+1. **Nullable Country (`stg_users.country`):** Preserved as `NULL` for ~1.5% of records without artificial imputation. Imputing arbitrary defaults (e.g., `'Unknown'` or mode country) would distort geographic marketing analytics.
+2. **Orphaned Raw Records:** Retained in the `raw` schema tables for auditability and observability reconciliation, validating that data engineers can measure pipeline attrition rates between raw ingestion and dimensional marts.
 
 ---
 
@@ -110,7 +145,23 @@ Alternatively, install dependencies via `pip`:
 pip install dbt-postgres psycopg2-binary sqlfluff Faker pytest pyyaml matplotlib seaborn pillow
 ```
 
-### 2. Configure dbt Profile
+### 2. Environment & Credential Configuration
+
+Create a local environment configuration file from the template:
+
+```bash
+cp .env.example .env
+```
+
+Set your database password and optional host/port overrides in `.env` or your shell:
+
+```bash
+export DB_PASSWORD="your_secure_password"
+```
+
+All operational scripts (`load_raw_data.py`, `render_dashboard_charts.py`) and dbt profiles resolve credentials through centralized environment configuration (`db_config.py`). If credentials are not supplied, operations fail immediately with an explicit, secure error message.
+
+### 3. Configure dbt Profile
 
 Copy the template configuration file to `profiles.yml`:
 
@@ -118,17 +169,32 @@ Copy the template configuration file to `profiles.yml`:
 cp profiles.example.yml profiles.yml
 ```
 
-Connection parameters can be customized via environment variables (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`) or directly within `profiles.yml`.
+The profile reads `DB_PASSWORD` directly from the environment without storing hardcoded credentials on disk.
 
-### 3. Database & Raw Data Ingestion
+### 4. Database Provisioning & Raw Data Ingestion
 
-Ensure PostgreSQL is running locally, then initialize the database and load the raw CSV files:
+Ensure PostgreSQL is running locally (e.g. via host service or Docker container):
 
 ```bash
+# Optional: Spin up PostgreSQL 16 container
+docker run --name postgres-warehouse \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=your_secure_password \
+  -e POSTGRES_DB=analytics_pipeline \
+  -p 5432:5432 -d postgres:16
+```
+
+Generate synthetic raw datasets and load them into PostgreSQL:
+
+```bash
+# Generate synthetic raw CSV files with deliberate messiness
+python generate_raw_data.py
+
+# Ingest raw CSV datasets into PostgreSQL under the 'raw' schema
 python load_raw_data.py
 ```
 
-### 4. Verify Connection
+### 5. Verify Connection
 
 ```bash
 dbt debug --profiles-dir .
@@ -174,10 +240,10 @@ The test suite enforces 62 data validation tests defined in [`TEST_PLAN.md`](TES
    - Primary key uniqueness and not-null constraints on `stg_users.user_id`, `stg_orders.order_id`, and `stg_events.event_id`.
    - Not-null validation on downstream dependencies (`signup_date`, `order_date`, `session_id`, `event_at`).
    - Missing fields allowed by design (`country`) are intentionally not asserted as not-null.
-2. **Intermediate Layer (23 generic + 2 custom singular tests):**
+2. **Intermediate Layer (21 generic + 2 custom singular tests):**
    - [`tests/test_session_duration_24h.sql`](tests/test_session_duration_24h.sql): Asserts session duration in `int_sessionized_events` is non-negative and ≤ 86,400 seconds (24 hours).
    - [`tests/test_first_purchase_after_signup.sql`](tests/test_first_purchase_after_signup.sql): Asserts that `first_purchase_date` in `int_user_first_purchase` is never earlier than the customer's `signup_date`.
-3. **Marts Layer (15 generic + 3 custom singular tests):**
+3. **Marts Layer (17 generic + 3 custom singular tests):**
    - [`tests/test_revenue_non_negative.sql`](tests/test_revenue_non_negative.sql): Asserts `total_revenue` and `average_order_value` in `fct_revenue_trends` are non-negative.
    - [`tests/test_retention_percentage_range.sql`](tests/test_retention_percentage_range.sql): Asserts `retention_pct` in `monthly_cohort_retention` falls within [0.00, 100.00]%.
    - [`tests/test_funnel_monotonic.sql`](tests/test_funnel_monotonic.sql): Asserts conversion counts are monotonically non-increasing (purchases ≤ cart additions ≤ page views).
@@ -189,12 +255,17 @@ The test suite enforces 62 data validation tests defined in [`TEST_PLAN.md`](TES
 
 - **GitHub Actions CI Workflow ([`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml)):**
   - Triggers on every `push` and `pull_request` to `main`/`master`.
-  - Spins up a clean PostgreSQL 16 service container.
-  - Ingests raw data via `load_raw_data.py`.
-  - Executes `dbt debug`, `dbt build`, and `sqlfluff lint models/`.
+  - Provisions an ephemeral PostgreSQL 16 service container with isolated test credentials (`ci_test_ephemeral_password`).
+  - Ingests raw synthetic data via `load_raw_data.py`.
+  - Executes granular, independently auditable workflow steps:
+    1. Connection validation (`dbt debug`)
+    2. Model compilation (`dbt compile`)
+    3. Model transformations (`dbt run`)
+    4. Data quality assertions (`dbt test`)
+    5. SQLFluff style linting (`sqlfluff lint models/`)
 - **Nightly Scheduled Workflow ([`.github/workflows/dbt_scheduled.yml`](.github/workflows/dbt_scheduled.yml)):**
-  - Triggers automatically via cron daily at 05:00 UTC (`0 5 * * *`).
-  - Re-executes the transformation build and test assertions unattended.
+  - Triggers automatically via cron daily at 05:00 UTC (`0 5 * * *`) and on-demand via `workflow_dispatch`.
+  - Executes unattended end-to-end verification across discrete stages (`dbt debug`, `dbt compile`, `dbt run`, `dbt test`, and `sqlfluff lint models/`).
 
 ---
 
@@ -216,6 +287,46 @@ Key metrics extracted directly from the marts tables:
 ## BI Dashboard (Metabase)
 
 The business intelligence layer connects to PostgreSQL on `localhost:5432` (database `analytics_pipeline`, user `postgres`) filtered strictly to the **`public_marts`** schema. Pointing BI tools exclusively to the marts layer ensures stakeholders only query curated, tested, documented fact and dimension tables, preventing exposure of raw or un-cleansed upstream data.
+
+### Reproducing the BI Dashboard in Metabase
+
+1. **Launch Metabase:**
+   Run Metabase locally via Docker:
+   ```bash
+   docker run -d -p 3000:3000 --name metabase metabase/metabase:latest
+   ```
+   Open `http://localhost:3000` in your browser and complete the initial account wizard.
+
+2. **Connect PostgreSQL Data Source:**
+   - **Database Type:** PostgreSQL
+   - **Host:** `localhost` (or `host.docker.internal` if Metabase runs inside a container)
+   - **Port:** `5432`
+   - **Database Name:** `analytics_pipeline`
+   - **Username / Password:** Configured credentials from `.env`
+   - **Schema Filter:** Restrict table synchronization strictly to the **`public_marts`** schema.
+
+3. **Explore Curated Analytical Marts:**
+   The BI layer directly visualizes three validated fact and dimension tables:
+   - `public_marts.monthly_cohort_retention`: Acquisition cohort retention matrices across elapsed months.
+   - `public_marts.funnel_summary`: Milestone conversion counts and drop-off percentages.
+   - `public_marts.fct_revenue_trends`: Daily aggregate revenue, order counts, and AOV.
+
+### Programmatic Dashboard Chart Rendering & Provenance
+
+To guarantee 100% offline reproducibility and automated visual documentation without requiring an active Metabase server instance, the repository provides a programmatic rendering script:
+
+```bash
+python render_dashboard_charts.py
+```
+
+**Artifact Provenance:**
+- This script connects directly to PostgreSQL via centralized `db_config`, queries the exact marts tables above, and programmatically renders publication-grade 300 DPI visualizations using `matplotlib` and `seaborn`.
+- It deterministically writes the executive charts to `screenshots/`:
+  - `screenshots/dashboard_cohort.png` (Customer Cohort Retention Curves)
+  - `screenshots/dashboard_funnel.png` (E-Commerce Conversion Funnel)
+  - `screenshots/dashboard_revenue.png` (Daily Revenue Trends & AOV)
+  - `screenshots/dashboard_full.png` (Consolidated Executive Dashboard Overview)
+- These rendered artifacts faithfully mirror the layout, color scheme, and metrics of the Metabase dashboard panels, providing an auditable, version-controlled baseline for stakeholder presentations.
 
 ### Executive Dashboard Overview
 

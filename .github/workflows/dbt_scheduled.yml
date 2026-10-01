@@ -11,12 +11,20 @@ jobs:
     name: Execute Nightly dbt Build
     runs-on: ubuntu-latest
 
+    env:
+      # Ephemeral test database credentials scoped exclusively to this CI runner & container
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ci_test_ephemeral_password
+      DB_NAME: analytics_pipeline
+
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ci_test_ephemeral_password
           POSTGRES_DB: analytics_pipeline
         ports:
           - 5432:5432
@@ -38,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install dbt-postgres psycopg2-binary
+          pip install dbt-postgres psycopg2-binary sqlfluff
 
       - name: Configure dbt profiles
         run: cp profiles.example.yml profiles.yml
@@ -46,19 +54,23 @@ jobs:
       - name: Load raw data into PostgreSQL warehouse
         run: |
           python load_raw_data.py
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_NAME: analytics_pipeline
 
-      - name: Run dbt build (models and tests)
+      - name: Validate dbt connection (dbt debug)
         run: |
-          dbt build --profiles-dir .
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_NAME: analytics_pipeline
+          dbt debug --profiles-dir .
+
+      - name: Compile dbt models (dbt compile)
+        run: |
+          dbt compile --profiles-dir .
+
+      - name: Execute dbt transformations (dbt run)
+        run: |
+          dbt run --profiles-dir .
+
+      - name: Execute data quality assertions (dbt test)
+        run: |
+          dbt test --profiles-dir .
+
+      - name: Run SQL style linting (sqlfluff)
+        run: |
+          sqlfluff lint models/

@@ -11,12 +11,20 @@ jobs:
     name: Build, Test & Lint Analytics Pipeline
     runs-on: ubuntu-latest
 
+    env:
+      # Ephemeral test database credentials scoped exclusively to this CI runner & container
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: ci_test_ephemeral_password
+      DB_NAME: analytics_pipeline
+
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: ci_test_ephemeral_password
           POSTGRES_DB: analytics_pipeline
         ports:
           - 5432:5432
@@ -46,32 +54,22 @@ jobs:
       - name: Load raw data into PostgreSQL service
         run: |
           python load_raw_data.py
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_NAME: analytics_pipeline
 
       - name: Validate dbt connection (dbt debug)
         run: |
           dbt debug --profiles-dir .
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_NAME: analytics_pipeline
 
-      - name: Build dbt models and run tests (dbt build)
+      - name: Compile dbt models (dbt compile)
         run: |
-          dbt build --profiles-dir .
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_NAME: analytics_pipeline
+          dbt compile --profiles-dir .
+
+      - name: Execute dbt transformations (dbt run)
+        run: |
+          dbt run --profiles-dir .
+
+      - name: Execute data quality assertions (dbt test)
+        run: |
+          dbt test --profiles-dir .
 
       - name: Run SQL style linting (sqlfluff)
         run: |

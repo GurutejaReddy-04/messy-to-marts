@@ -1,12 +1,12 @@
 """Renders BI dashboard charts from PostgreSQL marts."""
 
 from pathlib import Path
-import sys
-import psycopg2
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 import pandas as pd
+
+import db_config
 
 plt.style.use('seaborn-v0_8-whitegrid')
 plt.rcParams['font.family'] = 'sans-serif'
@@ -21,16 +21,8 @@ SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_db_connection():
-    try:
-        return psycopg2.connect(
-            dbname="analytics_pipeline",
-            user="postgres",
-            password="postgres",
-            host="localhost",
-            port="5432"
-        )
-    except psycopg2.OperationalError as e:
-        sys.exit(f"Database connection failed: {e}\nEnsure PostgreSQL is running locally on port 5432.")
+    """Retrieve an authenticated PostgreSQL database connection via centralized configuration."""
+    return db_config.get_db_connection()
 
 
 def render_cohort_retention_chart():
