@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Ephemeral test database credentials scoped exclusively to this CI runner & container
+      # Test database credentials
       DB_HOST: localhost
       DB_PORT: 5432
       DB_USER: postgres

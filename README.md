@@ -3,7 +3,7 @@
 [![dbt CI](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_ci.yml/badge.svg)](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_ci.yml)
 [![Scheduled dbt Run](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_scheduled.yml/badge.svg)](https://github.com/GurutejaReddy-04/messy-to-marts/actions/workflows/dbt_scheduled.yml)
 
-An analytics engineering pipeline that ingests raw transactional and clickstream event streams, standardizes and transforms data across a three-tier dbt architecture in PostgreSQL, enforces 62 automated data quality and business logic tests, runs automated continuous integration (CI) and nightly scheduled builds via GitHub Actions, and serves curated analytical marts directly to an executive Metabase BI dashboard.
+A dbt pipeline on PostgreSQL that transforms raw e-commerce event data into analysis-ready marts for a Metabase dashboard, including CI/CD and automated tests.
 
 ---
 
@@ -11,15 +11,15 @@ An analytics engineering pipeline that ingests raw transactional and clickstream
 
 - **End-to-End Data Lifecycle:** Ingests raw multi-table e-commerce data with real-world messiness (typo-variant user duplicates, late-arriving dimensions, conflicting retry submissions, negative entry glitches, non-UTC timestamps), cleanses and transforms it through staging and intermediate layers, and materializes analysis-ready marts.
 - **Incremental Data Modeling:** Implements an incremental merge fact model (`fct_revenue_trends`) that scales efficiently with daily transaction volume without requiring full table rebuilds.
-- **Robust Quality Governance:** Employs 62 automated tests (57 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), non-negative revenue, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
+- **Data Quality Tests:** Uses 62 dbt tests (57 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), non-negative revenue, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
 - **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflows execute granular, auditable steps (connection validation, compilation, model execution, test assertions, and `sqlfluff` style linting) against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC.
-- **Schema Change Isolation:** Proved architectural resilience through a live maintenance demonstration: upstream column rename from `order_value` → `order_amount` was fully adapted in 1 line in `stg_orders` with zero breaking changes propagated downstream.
+- **Schema Change Isolation:** Isolated schema changes: a column rename (`order_value` to `order_amount`) only required updating the `stg_orders` staging model.
 
 ---
 
 ## Architecture & Data Lineage
 
-The pipeline follows the modern analytics engineering paradigm, decomposing transformations into clear abstraction boundaries:
+Pipeline Architecture:
 
 ```text
 Raw Synthetic Data (users.csv, orders.csv, events.csv with deliberate messiness)

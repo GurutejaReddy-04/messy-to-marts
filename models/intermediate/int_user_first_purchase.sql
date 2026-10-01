@@ -1,9 +1,6 @@
 /*
 Intermediate: User Lifetime & First Purchase Metrics
-
-Business rationale:
-- Computes baseline acquisition and first-purchase timestamps for cohort retention marts.
-- Left joins against clean users so non-purchasers are tracked with zero spend and order counts.
+Computes acquisition and first-purchase timestamps, ensuring users with no purchases are included.
 */
 
 with users as (

@@ -8,10 +8,7 @@
 
 /*
 Marts: Daily Revenue Fact Table (Incremental)
-
-Business rationale:
-- Daily revenue rollup with order count and AOV.
-- Incremental merge avoids full table scans on every run.
+Rolls up daily revenue, order count, and AOV.
 */
 
 with orders as (
