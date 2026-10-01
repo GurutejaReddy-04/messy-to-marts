@@ -61,7 +61,7 @@ dbt Marts Layer (`public_marts`)
 | Component | Tool / Technology | Purpose |
 | :--- | :--- | :--- |
 | **Data Warehouse** | PostgreSQL 16 | Relational data warehouse hosting `raw`, `staging`, `intermediate`, and `marts` schemas |
-| **Transformation** | dbt-core / dbt-postgres 1.12.5 | Modular SQL modeling, incremental processing, documentation, and data testing |
+| **Transformation** | dbt-core 1.12.5 / dbt-postgres 1.11.0 | Modular SQL modeling, incremental processing, documentation, and data testing |
 | **Synthetic Data Generator** | Python 3.11, Faker, psycopg2 | Generation of realistic datasets with non-uniform distributions and deliberate messiness |
 | **Linter** | SQLFluff | Automated SQL syntax, CTE structure, and formatting enforcement |
 | **Continuous Integration** | GitHub Actions | Automated end-to-end execution against an ephemeral PostgreSQL service container |
@@ -142,7 +142,7 @@ conda activate analytics-pipeline
 Alternatively, install dependencies via `pip`:
 
 ```bash
-pip install dbt-postgres==1.12.5 psycopg2-binary sqlfluff Faker pytest pyyaml matplotlib seaborn pillow
+pip install dbt-core==1.12.5 dbt-postgres==1.11.0 psycopg2-binary sqlfluff Faker pytest pyyaml matplotlib seaborn pillow
 ```
 
 ### 2. Environment & Credential Configuration

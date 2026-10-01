@@ -8,7 +8,8 @@ dependencies:
   - pip:
       - Faker>=24.0.0
       - psycopg2-binary>=2.9.9
-      - dbt-postgres==1.12.5
+      - dbt-core==1.12.5
+      - dbt-postgres==1.11.0
       - sqlfluff>=3.0.0
       - pytest>=8.0.0
       - pyyaml>=6.0
