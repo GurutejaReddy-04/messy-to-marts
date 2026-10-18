@@ -7,5 +7,6 @@ select
     total_revenue,
     average_order_value
 from {{ ref('fct_revenue_trends') }}
-where total_revenue < 0
-   or average_order_value < 0
+where
+    total_revenue < 0
+    or average_order_value < 0

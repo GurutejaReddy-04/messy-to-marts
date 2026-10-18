@@ -9,12 +9,15 @@ Only test things that could plausibly break or matter for trust in the numbers. 
 
 ## Intermediate layer
 - Custom test: session duration never exceeds a sane bound (e.g., 24 hours) — catches sessionization logic bugs
-- Custom test: `first_purchase_date` is never earlier than `signup_date` — catches join/logic errors
+- Custom test: `first_purchase_at` is never earlier than `signup_at` — catches timestamp causality and timezone casting errors
+- Custom test: `first_purchase_order_id` strictly references completed orders — catches leakage of pending or cancelled orders
 
 ## Marts layer
 - `accepted_values` on any categorical/status field (e.g., funnel step names)
-- Custom test: `revenue_trends.total_revenue` is never negative
+- Custom test: `fct_revenue_trends.total_revenue` is never negative
+- Custom test: `fct_revenue_trends` daily revenue exactly matches completed orders — guarantees exclusion of non-completed orders
 - Custom test: `monthly_cohort_retention.retention_pct` is always between 0 and 100
+- Custom test: `monthly_cohort_retention` includes all observed cohorts from month 0 to the maximum dataset horizon without missing elapsed months (`test_cohort_spine_completeness`)
 - Custom test: `funnel_summary` conversion rates are monotonically non-increasing across funnel steps (can't have more purchases than add-to-carts)
 
 ## What NOT to test

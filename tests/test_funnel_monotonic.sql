@@ -16,5 +16,6 @@ select
     cart_sessions,
     purchase_sessions
 from funnel_steps
-where cart_sessions > page_view_sessions
-   or purchase_sessions > cart_sessions
+where
+    cart_sessions > page_view_sessions
+    or purchase_sessions > cart_sessions

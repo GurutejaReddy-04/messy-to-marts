@@ -1,6 +1,6 @@
 /*
-Asserts first_purchase_date is not earlier than signup_date.
-Catches time-traveling purchases from clock drift or bad timezone casting.
+Asserts first_purchase_at is not earlier than signup_at timestamp.
+Catches time-traveling purchases from clock drift, bad timezone casting, or chronological causality violations.
 */
 
 with first_purchases as (
@@ -30,7 +30,8 @@ invalid_first_purchases as (
     from first_purchases
     inner join users
         on first_purchases.user_id = users.user_id
-    where first_purchases.first_purchase_date < users.signup_date
+    where
+        first_purchases.first_purchase_at <= users.signup_at
 )
 
 select

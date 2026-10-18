@@ -5,7 +5,9 @@ models:
     description: >
       Mart model computing monthly user cohort retention matrices.
       Groups customers by acquisition signup month and evaluates active purchasing participation
-      across subsequent elapsed months (month 0 to month N).
+      across subsequent elapsed months (month 0 to month N). Generates a dense elapsed-month spine
+      ensuring inactive months are preserved (0 active users, 0.00% retention) while omitting
+      unobserved future calendar periods (right-censoring).
     columns:
       - name: cohort_month
         description: "First day of the customer acquisition cohort signup month."
@@ -36,8 +38,8 @@ models:
   - name: funnel_summary
     description: >
       Mart model summarizing e-commerce conversion funnel progression.
-      Evaluates session transition rates from top-of-funnel browsing (page_view) through cart additions (add_to_cart)
-      to completed orders (purchase).
+      Evaluates session transition rates enforcing strict chronological sequence from top-of-funnel browsing (page_view)
+      through cart additions (add_to_cart) to completed orders (purchase).
     columns:
       - name: funnel_step_order
         description: "Sequential numerical order of the conversion milestone (1, 2, 3)."
@@ -70,8 +72,9 @@ models:
 
   - name: fct_revenue_trends
     description: >
-      Incremental fact mart tracking daily gross transaction revenue, order volumes, unique customer counts,
-      and average order value (AOV). Built with incremental merge logic to scale with streaming/batched orders.
+      Incremental fact mart tracking daily completed gross transaction revenue, order volumes, unique customer counts,
+      and average order value (AOV). Built with incremental merge logic incorporating a configurable rolling lookback
+      window (default 7 days via revenue_lookback_days) to absorb late-arriving orders and zero out stale dates.
     columns:
       - name: order_date
         description: "Primary key identifier representing the transaction calendar date."
@@ -80,7 +83,7 @@ models:
           - not_null
 
       - name: total_revenue
-        description: "Gross merchandise value (GMV) generated on the calendar date."
+        description: "Gross merchandise value (GMV) of completed orders generated on the calendar date."
         tests:
           - not_null
 

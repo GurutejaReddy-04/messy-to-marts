@@ -109,6 +109,11 @@ models:
         tests:
           - not_null
 
+      - name: has_page_view
+        description: "Boolean flag indicating if at least one page-view action occurred in the session."
+        tests:
+          - not_null
+
       - name: has_cart_add
         description: "Boolean flag indicating if at least one add-to-cart action occurred in the session."
         tests:
@@ -116,6 +121,16 @@ models:
 
       - name: has_purchase
         description: "Boolean flag indicating if an order purchase conversion was completed in the session."
+        tests:
+          - not_null
+
+      - name: has_sequential_cart
+        description: "Boolean flag indicating if add-to-cart occurred in valid chronological sequence following a page view."
+        tests:
+          - not_null
+
+      - name: has_sequential_purchase
+        description: "Boolean flag indicating if purchase occurred in valid chronological sequence following page view and cart addition."
         tests:
           - not_null
 

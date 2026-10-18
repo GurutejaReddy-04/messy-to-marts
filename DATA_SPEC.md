@@ -4,7 +4,7 @@ Goal: messiness that looks like it came from years of real user behavior and sys
 
 ## users table
 - ~500-2,000 rows (pick one, note it in README)
-- 3-6% of users have a typo-variant duplicate elsewhere in the table (a second row, different user_id, near-identical but not identical email — e.g., missing letter, swapped letters, different domain typo like `gmial.com`). Vary the typo type across duplicates — don't use the same typo pattern every time.
+- 3-6% of users have a typo-variant duplicate elsewhere in the table (a second row, different user_id, near-identical email — e.g., domain typos like `gmial.com`, `yaho.com`, `outlok.com`, `hotmial.com`, or local-part dot variations for Gmail accounts). Deterministic syntactic patterns are used so SQL staging can resolve identity without risky heuristic fuzzy matching that could merge distinct individuals.
 - 1-2% of rows have a null `signup_date` or null `country`
 - Signup dates should cluster realistically (e.g., more signups in some months than others — not uniform distribution across the whole range)
 

@@ -10,9 +10,9 @@ A dbt pipeline on PostgreSQL that transforms raw e-commerce event data into anal
 ## Executive Summary & TL;DR
 
 - **End-to-End Data Lifecycle:** Ingests raw multi-table e-commerce data with real-world messiness (typo-variant user duplicates, late-arriving dimensions, conflicting retry submissions, negative entry glitches, non-UTC timestamps), cleanses and transforms it through staging and intermediate layers, and materializes analysis-ready marts.
-- **Incremental Data Modeling:** Implements an incremental merge fact model (`fct_revenue_trends`) that scales efficiently with daily transaction volume without requiring full table rebuilds.
-- **Data Quality Tests:** Uses 62 dbt tests (57 generic column assertions + 5 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), non-negative revenue, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
-- **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflows execute granular, auditable steps (connection validation, compilation, model execution, test assertions, and `sqlfluff` style linting) against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC.
+- **Incremental Data Modeling & Deletion Healing:** Implements an incremental merge fact model (`fct_revenue_trends`) that scales efficiently with daily transaction volume without requiring full table rebuilds, incorporating a configurable rolling lookback window (default 7 days via `revenue_lookback_days`). In-scope dates union target table dates (`{{ this }}`), automatically healing and zeroing out records whose source transactions were cancelled, refunded, or deleted.
+- **Data Quality Tests:** Uses 68 dbt tests (60 generic column assertions + 8 custom singular SQL business logic tests) verifying customer retention bounds (0–100%), dense cohort spine completeness, realized revenue reconciliation, timestamp causality, completed order integrity, session durations ≤ 24 hours, and monotonic funnel progression (purchases ≤ cart adds ≤ page views).
+- **Automated CI/CD & Nightly Scheduling:** GitHub Actions workflows execute granular, auditable steps (connection validation, compilation, model execution, test assertions, and `sqlfluff` style linting across models and tests) against an ephemeral PostgreSQL 16 service container on every pull request and nightly at 05:00 UTC as an integration health check.
 - **Schema Change Isolation:** Isolated schema changes: a column rename (`order_value` to `order_amount`) only required updating the `stg_orders` staging model.
 
 ---
@@ -44,9 +44,9 @@ dbt Marts Layer (`public_marts`)
   ├── funnel_summary           : Step-to-step and overall funnel conversion rates
   └── fct_revenue_trends       : Daily revenue, transaction volume, and AOV (Incremental Model)
          │
-         ├──► dbt Tests (62 generic and custom singular tests executed automatically)
+         ├──► dbt Tests (68 generic and custom singular tests executed automatically)
          ├──► GitHub Actions CI (Automated build, test, and sqlfluff lint on push/PR)
-         ├──► GitHub Actions Schedule (Nightly unattended execution at 05:00 UTC)
+         ├──► GitHub Actions Schedule (Nightly unattended CI integration health check at 05:00 UTC)
          └──► Metabase BI Dashboard (Direct queries against marts layer only)
 ```
 
@@ -76,30 +76,30 @@ The raw dataset reflects multi-year transactional and clickstream behaviors gene
 
 | Table | Row Count | Injected Messiness / Characteristic | Injected Rate / Actual Count |
 | :--- | :--- | :--- | :--- |
-| **`users`** | 1,000 | Typo-variant duplicate registrations (dot omissions, domain typos like `@gmial.com`, transposed characters) | 40 rows (4.0%) |
+| **`users`** | 1,000 | Typo-variant duplicate registrations (domain typos like `@gmial.com`, `@yaho.com`, and Gmail local-part dot variations) | 40 rows (4.0%) |
 | | | Null `signup_date` | 15 rows (1.5%) |
 | | | Null `country` (nullable by design) | 15 rows (1.5%) |
-| | | Signup Date Distribution | Clustered non-uniformly with acquisition peaks in Jan (124) and Nov/Dec (285) |
+| | | Signup Date Distribution | Clustered non-uniformly with acquisition peaks in Jan (117) and Nov/Dec (285) |
 | **`orders`** | 3,500 | Orphaned `user_id` (late-arriving customer dimensions) | 51 rows (1.46%) |
-| | | Negative or zero `order_amount` | 38 rows (1.09%)\* |
+| | | Negative or zero `order_amount` | 37 rows (1.06%)\* |
 | | | Duplicate `order_id` pairs with conflicting status/value/date (retry bugs) | 35 pairs (1.00%) |
-| | | Timestamp standard | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`) |
-| | | Day of Week Distribution | Weekend elevated: Mon (411), Tue (410), Wed (467), Thu (472), Fri (503), Sat (607), Sun (630) |
+| | | Timestamp standard | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`), strictly bounded within acquisition dates and year 2023 |
+| | | Day of Week Distribution | Weekend elevated: Mon (423), Tue (423), Wed (463), Thu (395), Fri (542), Sat (623), Sun (631) |
 | **`events`** | 15,000 | Orphaned `user_id` | 172 rows (1.15%) |
-| | | Funnel progression | `page_view` (11,997), `add_to_cart` (2,422), `purchase` (581) |
+| | | Funnel progression | `page_view` (11,997), `add_to_cart` (2,422), `purchase` (581) with chronological event sequencing |
 | | | Timestamp standard | Local time (`YYYY-MM-DD HH:MM:SS`), unadjusted for UTC |
 
-\* *Data spec note: The 1.09% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (28 rows / 0.80%) and duplicate retry cancellations setting order_amount to 0.00 USD (10 rows).*
+\* *Data spec note: The 1.06% negative/zero order rate resulted from an intentional interaction between the base entry glitch generator (27 rows / 0.77%) and duplicate retry cancellations setting order_amount to 0.00 USD (10 rows).*
 
 ### Anomaly Design Rationale
 
 The synthetic data generation framework deliberately introduces real-world messiness to test data governance and transformation resilience. The specific frequencies were chosen as operational design benchmarks authored for this synthetic dataset:
 
-- **4.0% Typo-Variant User Duplicates:** Reflects typical customer signup friction across mobile and desktop forms (omitted dots in Gmail handles, common domain typos like `@gmial.com`, or accidental double-submissions).
+- **4.0% Typo-Variant User Duplicates:** Reflects typical customer signup friction across mobile and desktop forms (omitted dots in Gmail handles, common domain typos like `@gmial.com`, `@yaho.com`, `@outlok.com`, `@hotmial.com`, or accidental double-submissions). The generator guarantees exactly 960 distinct base user identities, targeting deterministic syntactic variations so staging safely resolves 100% of injected duplicates without heuristic local-part fuzzy matching that risks merging distinct legitimate individuals.
 - **1.5% Null Registration Dates:** Simulates legacy user records migrated from early un-instrumented signup forms prior to strict timestamp capture.
 - **1.5% Null Geographic Country:** Reflects opt-out privacy settings or unresolved IP geolocation lookups in modern compliance frameworks.
 - **1.46% Orphaned Order User IDs:** Models late-arriving dimensions in decoupled event-driven architectures where transactional databases stream purchase events before CRM master identity replicas synchronize.
-- **1.09% Negative or Zero Order Amounts:** Simulates payment gateway refund processing glitches, test transactions mistakenly written to production logs, and promotional zero-dollar checkout orders.
+- **1.06% Negative or Zero Order Amounts:** Simulates payment gateway refund processing glitches, test transactions mistakenly written to production logs, and promotional zero-dollar checkout orders.
 - **1.00% Conflicting Duplicate Orders:** Models checkout client retry race conditions when consumers double-click purchase buttons under network latency, generating identical transaction IDs with conflicting status or timestamps.
 - **1.15% Orphaned Event User IDs:** Simulates unauthenticated or anonymous visitor sessions that browse products before account registration or login.
 
@@ -109,11 +109,12 @@ Every injected anomaly is systematically handled at a specific transformation la
 
 | Injected Anomaly / Defect | Ingestion Table | Resolving Model | Transformation Technique & Resolution Strategy |
 | :--- | :--- | :--- | :--- |
-| **Typo Duplicate Users** | `raw.users` | `stg_users` | Window ranking (`ROW_NUMBER() OVER (PARTITION BY normalized_email ORDER BY signup_at ASC)`) keeps only the earliest registration. |
+| **Typo Duplicate Users** | `raw.users` | `stg_users` | Deterministic domain canonicalization + Gmail dot stripping; window ranking (`ROW_NUMBER() OVER (PARTITION BY normalized_email ORDER BY signup_at ASC)`) resolves 100% (40/40) of injected duplicates. |
 | **Null `signup_date`** | `raw.users` | `stg_users` | Filtered out (`WHERE signup_date IS NOT NULL`) to preserve downstream cohort integrity; flagged as invalid registrations. |
 | **Conflicting Duplicate Orders** | `raw.orders` | `stg_orders` | Deduplicated via window ranking prioritizing `order_status = 'completed'` and latest attempt timestamp. |
 | **Negative / Zero Values** | `raw.orders` | `stg_orders` | Validated and filtered (`WHERE order_amount > 0.00`) to guarantee non-negative revenue calculations in marts. |
 | **Orphaned User Orders** | `raw.orders` | `int_user_first_purchase` | Preserved in staging; inner joined against cleansed `stg_users` so only verified accounts drive cohort metrics. |
+| **Out-of-Order Funnel Events** | `raw.events` | `int_sessionized_events`, `funnel_summary` | Enforces strict chronological milestone progression (`first_page_view_at <= first_add_to_cart_at <= first_purchase_at`). |
 | **Timezone Inconsistencies** | `raw.events` | `stg_events` | Documented and cast to explicit client-local timestamps; day boundaries normalized for daily funnel aggregation. |
 
 ### Intentional Residual Anomalies
@@ -190,9 +191,16 @@ Generate synthetic raw datasets and load them into PostgreSQL:
 # Generate synthetic raw CSV files with deliberate messiness
 python generate_raw_data.py
 
-# Ingest raw CSV datasets into PostgreSQL under the 'raw' schema
+# Ingest raw CSV datasets into PostgreSQL under the 'raw' schema (safe TRUNCATE by default)
 python load_raw_data.py
+
+# Optional: To perform a destructive drop-and-recreate of raw tables:
+python load_raw_data.py --drop-tables
 ```
+
+> [!NOTE]
+> **Ephemeral CI Verification vs. Persistent Production Warehouse:**
+> In GitHub Actions CI, jobs execute against an ephemeral PostgreSQL service container where `load_raw_data.py` provisions seed tables for complete integration verification. In persistent production warehouses, `load_raw_data.py` uses `CREATE TABLE IF NOT EXISTS` and `TRUNCATE TABLE` by default to safeguard against accidentally cascading drops of dependent views or constraints. Destructive schema drops require explicit `--drop-tables` or `--force-reset` flags.
 
 ### 5. Verify Connection
 
@@ -213,7 +221,7 @@ dbt build --profiles-dir .
 # Run models only
 dbt run --profiles-dir .
 
-# Execute data quality test suite only (62 tests)
+# Execute data quality test suite only (68 tests)
 dbt test --profiles-dir .
 
 # Lint SQL models against style rules
@@ -234,18 +242,22 @@ dbt docs serve
 
 ## Testing Strategy
 
-The test suite enforces 62 data validation tests defined in [`TEST_PLAN.md`](TEST_PLAN.md):
+The test suite enforces 68 data validation tests (60 generic column assertions + 8 custom singular tests) defined in [`TEST_PLAN.md`](TEST_PLAN.md):
 
 1. **Staging Layer (19 generic tests):**
    - Primary key uniqueness and not-null constraints on `stg_users.user_id`, `stg_orders.order_id`, and `stg_events.event_id`.
-   - Not-null validation on downstream dependencies (`signup_date`, `order_date`, `session_id`, `event_at`).
+   - Not-null validation on downstream dependencies (`signup_date`, `order_date`, `session_id`, `event_name`, `event_timestamp`).
    - Missing fields allowed by design (`country`) are intentionally not asserted as not-null.
-2. **Intermediate Layer (21 generic + 2 custom singular tests):**
+2. **Intermediate Layer (24 generic + 3 custom singular tests):**
+   - Column assertions on session identifiers, event metrics, sequential funnel milestone flags (`has_sequential_cart`, `has_sequential_purchase`), and first purchase timestamps.
    - [`tests/test_session_duration_24h.sql`](tests/test_session_duration_24h.sql): Asserts session duration in `int_sessionized_events` is non-negative and ≤ 86,400 seconds (24 hours).
-   - [`tests/test_first_purchase_after_signup.sql`](tests/test_first_purchase_after_signup.sql): Asserts that `first_purchase_date` in `int_user_first_purchase` is never earlier than the customer's `signup_date`.
-3. **Marts Layer (17 generic + 3 custom singular tests):**
+   - [`tests/test_first_purchase_after_signup.sql`](tests/test_first_purchase_after_signup.sql): Asserts that `first_purchase_at` in `int_user_first_purchase` strictly occurs after the customer's registration timestamp `signup_at` (UTC).
+   - [`tests/test_first_purchase_status_completed.sql`](tests/test_first_purchase_status_completed.sql): Asserts that all customer initial purchase metrics strictly reference valid `completed` orders in `stg_orders`.
+3. **Marts Layer (17 generic + 5 custom singular tests):**
    - [`tests/test_revenue_non_negative.sql`](tests/test_revenue_non_negative.sql): Asserts `total_revenue` and `average_order_value` in `fct_revenue_trends` are non-negative.
+   - [`tests/test_revenue_excludes_non_completed_orders.sql`](tests/test_revenue_excludes_non_completed_orders.sql): Asserts daily revenue, order counts, distinct purchasing customers, and average order values in `fct_revenue_trends` reconcile exactly with completed orders in `stg_orders`, coalescing in-scope zero-completed dates to $0.00 / 0.
    - [`tests/test_retention_percentage_range.sql`](tests/test_retention_percentage_range.sql): Asserts `retention_pct` in `monthly_cohort_retention` falls within [0.00, 100.00]%.
+   - [`tests/test_cohort_spine_completeness.sql`](tests/test_cohort_spine_completeness.sql): Asserts that `monthly_cohort_retention` includes all observed cohorts from month 0 up to the maximum dataset horizon without missing elapsed months, catching dropped cohorts or omitted zero-completed periods.
    - [`tests/test_funnel_monotonic.sql`](tests/test_funnel_monotonic.sql): Asserts conversion counts are monotonically non-increasing (purchases ≤ cart additions ≤ page views).
    - `accepted_values` on `funnel_summary.funnel_step` (`['page_view', 'add_to_cart', 'purchase']`).
 
@@ -256,16 +268,18 @@ The test suite enforces 62 data validation tests defined in [`TEST_PLAN.md`](TES
 - **GitHub Actions CI Workflow ([`.github/workflows/dbt_ci.yml`](.github/workflows/dbt_ci.yml)):**
   - Triggers on every `push` and `pull_request` to `main`/`master`.
   - Provisions an ephemeral PostgreSQL 16 service container with an intentionally non-secret, fixed test credential (`ci_test_ephemeral_password`) scoped exclusively to the CI service container and job environment.
-  - Ingests raw synthetic data via `load_raw_data.py`.
+  - Ingests raw synthetic data via `load_raw_data.py --replace`.
   - Executes granular, independently auditable workflow steps:
     1. Connection validation (`dbt debug`)
     2. Model compilation (`dbt compile`)
     3. Model transformations (`dbt run`)
-    4. Data quality assertions (`dbt test`)
-    5. SQLFluff style linting (`sqlfluff lint models/`)
+    4. Data quality assertions (`dbt test` — all 68 tests)
+    5. Offline fallback parity verification (`python tests/test_fallback_parity.py`)
+    6. Two-pass incremental source-deletion recovery validation (`python tests/test_incremental_deletion_recovery.py`)
+    7. SQLFluff style linting (`sqlfluff lint models/ tests/`)
 - **Nightly Scheduled Workflow ([`.github/workflows/dbt_scheduled.yml`](.github/workflows/dbt_scheduled.yml)):**
-  - Triggers automatically via cron daily at 05:00 UTC (`0 5 * * *`) and on-demand via `workflow_dispatch`.
-  - Executes unattended end-to-end verification across discrete stages (`dbt debug`, `dbt compile`, `dbt run`, `dbt test`, and `sqlfluff lint models/`).
+  - Triggers automatically via cron daily at 05:00 UTC (`0 5 * * *`) and on-demand via `workflow_dispatch` as a scheduled CI integration health check.
+  - Provisions a clean ephemeral PostgreSQL container, loads synthetic test fixtures via `python load_raw_data.py --replace`, and executes the complete pipeline (`dbt debug`, `dbt compile`, `dbt run`, `dbt test`, and `sqlfluff lint models/ tests/`) to guarantee pipeline reproducibility from scratch on fresh infrastructure.
 
 ---
 
@@ -278,9 +292,12 @@ Key metrics extracted directly from the marts tables:
    - **Add-to-Cart Conversion:** 1,512 sessions added items to cart (32.36% step conversion rate).
    - **Purchase Checkout Conversion:** 581 sessions completed an order (38.43% step conversion from cart; 12.44% overall conversion from page view).
 2. **Cohort Retention Patterns (`monthly_cohort_retention`):**
-   - January 2023 Cohort (N = 124): Month 0 retention is 41.13%, rising to a repeat purchase peak of 61.29% in Month 1, gradually tapering to 36.29% in Month 3, 25.00% in Month 4, and 4.03% by Month 8.
+   - January 2023 Cohort (N = 116): Month 0 acquisition activity is 49.14% (57 active users), rising to a repeat purchase peak of 56.03% in Month 1 (65 active users), tapering to 43.10% in Month 2, 26.72% in Month 3, 17.24% in Month 4, and 1.72% by Month 8.
+   - Dense Spine & Right-Censoring: All 12 monthly acquisition cohorts (946 cohorted users across 2023) maintain complete elapsed-month spines up to December 2023, preserving zero-retention periods (`0.00%`) while omitting unobserved future periods.
 3. **Revenue Trends & Incremental Scaling (`fct_revenue_trends`):**
-   - Daily gross revenue shows steady baseline performance with elevated transaction volume on weekends (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday peaks.
+   - Daily gross completed revenue aggregates to $182,321.85 across 2,792 completed orders (362 active transaction days, 363 total tracked calendar dates, mean active day AOV $66.28).
+   - Elevated transaction volume occurs on weekends (Saturday/Sunday generating 36.6% of weekly completed order volume) alongside pronounced Q4 holiday sales surges.
+   - **Source Deletion Operational Model:** Deletions occurring within the rolling 7-day lookback window are automatically healed and zeroed out ($0.00 revenue / 0 orders) because `dates_in_scope` unions target table dates (`{{ this }}`) with staging. Historical deletions older than the lookback SLA are reconciled via standard on-demand full refresh (`dbt run --full-refresh --select fct_revenue_trends`).
 
 ---
 
@@ -341,7 +358,7 @@ The executive dashboard consolidates key business metrics into a unified view:
 #### 1. Customer Cohort Retention Curves
 - **Source Table:** `public_marts.monthly_cohort_retention`
 - **Axes:** X-axis = `month_number` (0 to 11), Y-axis = `retention_pct` (0% to 100%), Series = `cohort_month`.
-- **Business Insight:** Tracks customer loyalty across acquisition cohorts over time. The January 2023 cohort achieves a peak repeat purchase rate of 61.29% in Month 1, declining to 36.29% in Month 3 and 4.03% in Month 8.
+- **Business Insight:** Tracks customer loyalty across acquisition cohorts over time. The January 2023 cohort (N = 116) achieves a peak repeat purchase rate of 56.03% in Month 1, declining to 26.72% in Month 3 and 1.72% in Month 8.
 
 ![Cohort Retention Curves](screenshots/dashboard_cohort.png)
 
@@ -355,7 +372,7 @@ The executive dashboard consolidates key business metrics into a unified view:
 #### 3. Daily Revenue Trends & Average Order Value
 - **Source Table:** `public_marts.fct_revenue_trends`
 - **Axes:** X-axis = `order_date`, Primary Y-axis = `total_revenue` (USD), Secondary Y-axis = `average_order_value` (USD).
-- **Business Insight:** Visualizes gross transaction velocity, highlighting weekend purchasing spikes (Saturday/Sunday generating 35.3% of weekly volume) and Q4 holiday sales surges. Built as an incremental model for low-latency updates.
+- **Business Insight:** Visualizes gross transaction velocity, highlighting weekend purchasing spikes (Saturday/Sunday generating 36.6% of weekly completed order volume) and Q4 holiday sales surges. Built as an incremental model for low-latency updates.
 
 ![Revenue Trends](screenshots/dashboard_revenue.png)
 

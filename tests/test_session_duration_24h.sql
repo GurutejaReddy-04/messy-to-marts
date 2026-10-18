@@ -10,5 +10,6 @@ select
     session_end_at,
     session_duration_seconds
 from {{ ref('int_sessionized_events') }}
-where session_duration_seconds > 86400
-   or session_duration_seconds < 0
+where
+    session_duration_seconds > 86400
+    or session_duration_seconds < 0
