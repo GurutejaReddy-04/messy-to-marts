@@ -96,8 +96,19 @@ def generate_raw_events(user_records: list[dict]) -> list[dict]:
     """Generate raw event records with realistic session distributions and orphaned keys."""
     random_instance = random.Random(config.SEED_EVENTS)
 
-    valid_user_ids = [u["user_id"] for u in user_records if not u.get("is_typo_duplicate", False)]
-    user_lookup = {u["user_id"]: u for u in user_records}
+    max_end_dt = datetime.strptime(config.END_DATE, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    base_user_count = config.TOTAL_USERS_TARGET - int(config.TOTAL_USERS_TARGET * config.USER_TYPO_DUPLICATE_RATE)
+    valid_user_ids = [
+        int(u["user_id"])
+        for u in user_records
+        if int(u["user_id"]) <= base_user_count
+        and not u.get("is_typo_duplicate", False)
+        and (
+            not u.get("signup_date")
+            or datetime.strptime(u["signup_date"], "%Y-%m-%d %H:%M:%S") < max_end_dt
+        )
+    ]
+    user_lookup = {int(u["user_id"]): u for u in user_records}
 
     orphaned_user_pool = list(range(9001, 9500))
 

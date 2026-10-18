@@ -94,7 +94,7 @@ def get_db_connection(
             conn.autocommit = True
         return conn
     except psycopg2.OperationalError as e:
-        sys.exit(
+        raise psycopg2.OperationalError(
             f"Database connection failed to {creds['host']}:{creds['port']}/{target_dbname}: {e}\n"
             f"Ensure PostgreSQL is running and environment variables (DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME) are properly set."
-        )
+        ) from e

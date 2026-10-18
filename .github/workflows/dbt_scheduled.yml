@@ -1,9 +1,12 @@
+# Operational scope: This scheduled cron acts as a nightly CI integration health check
+# on ephemeral PostgreSQL service containers. It validates end-to-end fixture loading (--replace),
+# dbt transformations, and data quality tests to guarantee pipeline reproducibility.
+
 name: Scheduled dbt Run
 
 on:
-  # Daily batch schedule (can be enabled for automated production warehousing):
-  # schedule:
-  #   - cron: '0 5 * * *'
+  schedule:
+    - cron: '0 5 * * *'
   workflow_dispatch:
 
 jobs:
@@ -54,7 +57,7 @@ jobs:
 
       - name: Load raw data into PostgreSQL warehouse
         run: |
-          python load_raw_data.py
+          python load_raw_data.py --replace
 
       - name: Validate dbt connection (dbt debug)
         run: |
@@ -74,4 +77,4 @@ jobs:
 
       - name: Run SQL style linting (sqlfluff)
         run: |
-          sqlfluff lint models/
+          sqlfluff lint models/ tests/

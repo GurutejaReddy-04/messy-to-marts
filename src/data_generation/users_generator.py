@@ -37,53 +37,49 @@ def generate_clustered_signup_date(start_date_str: str, end_date_str: str, rando
     hour = random_instance.randint(0, 23)
     minute = random_instance.randint(0, 59)
     second = random_instance.randint(0, 59)
+    if selected_month == 12 and day == 31 and hour == 23 and minute == 59 and second >= 55:
+        second = 50
 
     return datetime(2023, selected_month, day, hour, minute, second)
 
 
 def create_typo_variant_email(original_email: str, random_instance: random.Random) -> str:
-    """Create a realistic typo variant of an email address using varied patterns."""
+    """Create a realistic typo variant of an email address using deterministic patterns resolvable in SQL staging.
+
+    Supported patterns:
+    - Domain typos for standard webmail providers (gmail.com, yahoo.com, hotmail.com, outlook.com)
+    - Local-part dot variation for Gmail accounts (RFC / Google Gmail dot blindness)
+    """
     local_part, domain_part = original_email.split("@", 1)
-    typo_strategy = random_instance.choice(["swap_chars", "drop_char", "add_char", "domain_typo", "dot_variation"])
 
-    if typo_strategy == "swap_chars" and len(local_part) > 3:
-        # Swap two adjacent characters in local part
-        idx = random_instance.randint(1, len(local_part) - 2)
-        local_chars = list(local_part)
-        local_chars[idx], local_chars[idx + 1] = local_chars[idx + 1], local_chars[idx]
-        return f"{''.join(local_chars)}@{domain_part}"
+    domain_replacements = {
+        "gmail.com": ["gmial.com", "gmai.com", "gamil.com", "googlemail.com"],
+        "yahoo.com": ["yaho.com", "yahooo.com", "yaho.co"],
+        "hotmail.com": ["hotmial.com", "hotmal.com"],
+        "outlook.com": ["outlok.com", "outlookk.com"],
+    }
 
-    elif typo_strategy == "drop_char" and len(local_part) > 4:
-        # Drop a single character
-        idx = random_instance.randint(1, len(local_part) - 2)
-        return f"{local_part[:idx]}{local_part[idx+1:]}@{domain_part}"
+    is_gmail = domain_part in ("gmail.com", "googlemail.com")
 
-    elif typo_strategy == "add_char" and len(local_part) > 2:
-        # Duplicate an adjacent character
-        idx = random_instance.randint(1, len(local_part) - 1)
-        return f"{local_part[:idx]}{local_part[idx]}{local_part[idx:]}@{domain_part}"
-
-    elif typo_strategy == "domain_typo":
-        # Realistic domain typos
-        domain_replacements = {
-            "gmail.com": random_instance.choice(["gmial.com", "gmai.com", "gamil.com"]),
-            "yahoo.com": random_instance.choice(["yaho.com", "yahooo.com", "yaho.co"]),
-            "hotmail.com": random_instance.choice(["hotmial.com", "hotmal.com"]),
-            "outlook.com": random_instance.choice(["outlok.com", "outlookk.com"]),
-        }
-        for known_domain, typo_domain in domain_replacements.items():
-            if domain_part.endswith(known_domain):
+    if is_gmail:
+        strategy = random_instance.choice(["dot_variation", "domain_typo", "both"])
+        if strategy in ("dot_variation", "both"):
+            if "." in local_part:
+                local_part = local_part.replace(".", "")
+            else:
+                mid = len(local_part) // 2
+                local_part = f"{local_part[:mid]}.{local_part[mid:]}"
+        if strategy in ("domain_typo", "both"):
+            typo_domain = random_instance.choice(domain_replacements["gmail.com"])
+            return f"{local_part}@{typo_domain}"
+        return f"{local_part}@{domain_part}"
+    else:
+        # For non-Gmail domains, apply domain typos (local-part dots are preserved per provider RFC)
+        for known_domain, typo_list in domain_replacements.items():
+            if domain_part == known_domain:
+                typo_domain = random_instance.choice(typo_list)
                 return f"{local_part}@{typo_domain}"
         return f"{local_part}@gmial.com"
-
-    else:
-        # Dot variation: either add or remove dot in local part
-        if "." in local_part:
-            return f"{local_part.replace('.', '')}@{domain_part}"
-        elif len(local_part) > 4:
-            midpoint = len(local_part) // 2
-            return f"{local_part[:midpoint]}.{local_part[midpoint:]}@{domain_part}"
-        return f"{local_part}1@{domain_part}"
 
 
 def generate_raw_users() -> list[dict]:
@@ -98,13 +94,20 @@ def generate_raw_users() -> list[dict]:
 
     user_records: list[dict] = []
     base_user_pool: list[dict] = []
+    seen_base_emails: set[str] = set()
 
-    # Step 1: Generate primary base users
+    # Step 1: Generate primary base users with guaranteed unique normalized emails
     for user_index in range(1, base_user_count + 1):
-        first_name = faker_instance.first_name()
-        last_name = faker_instance.last_name()
-        domain = random_instance.choice(["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "example.com"])
-        clean_email = f"{first_name.lower()}.{last_name.lower()}@{domain}"
+        while True:
+            first_name = faker_instance.first_name()
+            last_name = faker_instance.last_name()
+            domain = random_instance.choice(["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"])
+            clean_email = f"{first_name.lower()}.{last_name.lower()}@{domain}"
+            norm_check = clean_email.replace(".", "") if domain == "gmail.com" else clean_email
+            if norm_check not in seen_base_emails:
+                seen_base_emails.add(norm_check)
+                break
+
         country_code = random_instance.choices(config.USER_COUNTRIES, weights=config.USER_COUNTRY_WEIGHTS, k=1)[0]
         signup_dt = generate_clustered_signup_date(config.START_DATE, config.END_DATE, random_instance)
 
@@ -131,7 +134,7 @@ def generate_raw_users() -> list[dict]:
         # Duplicate signup is typically days/weeks later
         orig_signup = datetime.strptime(original_user["signup_date"], "%Y-%m-%d %H:%M:%S")
         days_offset = random_instance.randint(5, 60)
-        dup_signup = min(orig_signup + timedelta(days=days_offset), datetime(2023, 12, 31, 23, 59, 59))
+        dup_signup = min(orig_signup + timedelta(days=days_offset), datetime(2023, 12, 31, 23, 59, 50))
 
         duplicate_entry = {
             "user_id": next_user_id,

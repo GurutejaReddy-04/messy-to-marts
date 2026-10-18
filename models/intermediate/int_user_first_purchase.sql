@@ -20,6 +20,7 @@ orders as (
         order_value,
         order_status
     from {{ ref('stg_orders') }}
+    where order_status = 'completed'
 ),
 
 user_orders_ranked as (

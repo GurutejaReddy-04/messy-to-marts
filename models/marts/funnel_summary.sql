@@ -9,16 +9,23 @@ Business rationale:
 with session_base as (
     select
         session_id,
-        has_cart_add,
-        has_purchase
+        has_page_view,
+        has_sequential_cart,
+        has_sequential_purchase
     from {{ ref('int_sessionized_events') }}
 ),
 
 funnel_counts as (
     select
-        count(session_id) as total_page_view_sessions,
-        count(session_id) filter (where has_cart_add = true) as total_cart_sessions,
-        count(session_id) filter (where has_purchase = true) as total_purchase_sessions
+        count(session_id) filter (
+            where has_page_view = true
+        ) as total_page_view_sessions,
+        count(session_id) filter (
+            where has_sequential_cart = true
+        ) as total_cart_sessions,
+        count(session_id) filter (
+            where has_sequential_purchase = true
+        ) as total_purchase_sessions
     from session_base
 ),
 

@@ -2,7 +2,8 @@
 Staging: User Accounts
 
 Cleaning logic:
-- People struggle to spell 'gmail' and 'yahoo'. Strip dots from local-part and fix common domain typos.
+- Standardize provider-specific email syntax: strip local-part dots for Gmail only (per RFC / provider specifications)
+  while preserving dots for non-Gmail domains (Yahoo, Outlook, custom). Fix common domain typos.
 - Retain the earliest valid registration per individual (rank = 1).
 - Drop rows missing signup_date (cannot cohort un-dated users). Country nulls are kept as-is.
 */
@@ -24,20 +25,20 @@ normalized_users as (
         first_name,
         last_name,
         raw_email,
-        -- Standardize domain typos and strip local-part dots
+        -- Standardize domain typos and strip local-part dots for Gmail only
         case
-            when split_part(raw_email, '@', 2) in ('gmial.com', 'gmai.com', 'gamil.com')
-                then split_part(replace(raw_email, '.', ''), '@', 1) || '@gmail.com'
+            when split_part(raw_email, '@', 2) in ('gmail.com', 'googlemail.com', 'gmial.com', 'gmai.com', 'gamil.com')
+                then replace(split_part(raw_email, '@', 1), '.', '') || '@gmail.com'
             when split_part(raw_email, '@', 2) in ('yaho.com', 'yahooo.com', 'yaho.co')
-                then split_part(replace(raw_email, '.', ''), '@', 1) || '@yahoo.com'
+                then split_part(raw_email, '@', 1) || '@yahoo.com'
             when split_part(raw_email, '@', 2) in ('hotmial.com', 'hotmal.com')
-                then split_part(replace(raw_email, '.', ''), '@', 1) || '@hotmail.com'
+                then split_part(raw_email, '@', 1) || '@hotmail.com'
             when split_part(raw_email, '@', 2) in ('outlok.com', 'outlookk.com')
-                then split_part(replace(raw_email, '.', ''), '@', 1) || '@outlook.com'
-            else replace(split_part(raw_email, '@', 1), '.', '') || '@' || split_part(raw_email, '@', 2)
+                then split_part(raw_email, '@', 1) || '@outlook.com'
+            else raw_email
         end as normalized_email,
         nullif(trim(country), '') as country,
-        nullif(trim(signup_date), '')::timestamp as signup_at,
+        (nullif(trim(signup_date), '') || ' UTC')::timestamptz as signup_at,
         nullif(trim(signup_date), '')::date as signup_date
     from raw_users
 ),

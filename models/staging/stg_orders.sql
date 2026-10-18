@@ -22,7 +22,7 @@ parsed_orders as (
     select
         order_id,
         user_id,
-        order_date::timestamp as ordered_at,
+        order_date::timestamptz as ordered_at,
         order_date::date as order_date,
         order_value,
         lower(trim(order_status)) as order_status

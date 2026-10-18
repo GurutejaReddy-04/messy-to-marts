@@ -22,15 +22,16 @@ def generate_clustered_order_timestamp(
 ) -> datetime:
     """Generate an order timestamp occurring after user signup with realistic seasonal and weekend weighting."""
     start_bound = datetime.strptime(config.START_DATE, "%Y-%m-%d")
-    end_bound = datetime.strptime(config.END_DATE, "%Y-%m-%d")
+    max_end_dt = datetime.strptime(config.END_DATE, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
 
     if user_signup_str:
         user_signup_dt = datetime.strptime(user_signup_str, "%Y-%m-%d %H:%M:%S")
         earliest_date = user_signup_dt.date()
     else:
+        user_signup_dt = None
         earliest_date = start_bound.date()
 
-    latest_date = end_bound.date()
+    latest_date = max_end_dt.date()
     available_days = max(1, (latest_date - earliest_date).days + 1)
 
     candidate_days = [earliest_date + timedelta(days=day_idx) for day_idx in range(available_days)]
@@ -52,20 +53,46 @@ def generate_clustered_order_timestamp(
     minute = random_instance.randint(0, 59)
     second = random_instance.randint(0, 59)
 
-    return datetime(chosen_day.year, chosen_day.month, chosen_day.day, hour, minute, second)
+    order_dt = datetime(chosen_day.year, chosen_day.month, chosen_day.day, hour, minute, second)
+    if user_signup_dt:
+        if user_signup_dt >= max_end_dt:
+            raise ValueError(
+                f"Cannot generate order timestamp after user signup '{user_signup_dt}' "
+                f"within maximum bound '{max_end_dt}'. Order must occur strictly after signup."
+            )
+        remaining_seconds = int((max_end_dt - user_signup_dt).total_seconds())
+        if order_dt <= user_signup_dt:
+            add_seconds = random_instance.randint(1, min(3600, remaining_seconds))
+            order_dt = user_signup_dt + timedelta(seconds=add_seconds)
+
+    if order_dt > max_end_dt:
+        order_dt = max_end_dt
+
+    return order_dt
 
 
 def generate_raw_orders(user_records: list[dict]) -> list[dict]:
     """Generate raw order records adhering to target volumes and deliberate messiness rules."""
     random_instance = random.Random(config.SEED_ORDERS)
+    max_end_dt = datetime.strptime(config.END_DATE, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
 
     total_target_count = config.TOTAL_ORDERS_TARGET
     duplicate_count = int(total_target_count * config.ORDER_CONFLICTING_DUPLICATE_RATE)
     base_order_count = total_target_count - duplicate_count
 
-    # Identify existing valid user IDs
-    valid_user_ids = [u["user_id"] for u in user_records if not u.get("is_typo_duplicate", False)]
-    user_lookup = {u["user_id"]: u for u in user_records}
+    # Identify existing valid base user IDs (strictly <= base_user_count, excluding typo duplicates and upper-bound signups)
+    base_user_count = config.TOTAL_USERS_TARGET - int(config.TOTAL_USERS_TARGET * config.USER_TYPO_DUPLICATE_RATE)
+    valid_user_ids = [
+        int(u["user_id"])
+        for u in user_records
+        if int(u["user_id"]) <= base_user_count
+        and not u.get("is_typo_duplicate", False)
+        and (
+            not u.get("signup_date")
+            or datetime.strptime(u["signup_date"], "%Y-%m-%d %H:%M:%S") < max_end_dt
+        )
+    ]
+    user_lookup = {int(u["user_id"]): u for u in user_records}
 
     # Generate pool of orphaned / non-existent user IDs (IDs well outside the range)
     orphaned_user_pool = list(range(9001, 9500))
@@ -146,9 +173,10 @@ def generate_raw_orders(user_records: list[dict]) -> list[dict]:
             # Status changed between retry (e.g. pending vs completed)
             dup_status = "pending" if orig_order["order_status"] == "completed" else "completed"
         elif conflict_type == "shifted_timestamp":
-            # Shifted timestamp by a few seconds/minutes
+            # Shifted timestamp by a few seconds/minutes, strictly clamped to max_end_dt
             orig_dt = datetime.strptime(orig_order["order_date"], "%Y-%m-%dT%H:%M:%SZ")
-            dup_dt = orig_dt + timedelta(seconds=random_instance.randint(15, 300))
+            max_shift = max(1, min(300, int((max_end_dt - orig_dt).total_seconds())))
+            dup_dt = min(orig_dt + timedelta(seconds=random_instance.randint(1, max_shift)), max_end_dt)
             dup_date = dup_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
         else:
             dup_status = "cancelled"

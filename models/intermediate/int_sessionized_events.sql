@@ -30,7 +30,10 @@ session_aggregates as (
         count(event_id) as total_events_count,
         sum(case when event_name = 'page_view' then 1 else 0 end) as page_view_count,
         sum(case when event_name = 'add_to_cart' then 1 else 0 end) as add_to_cart_count,
-        sum(case when event_name = 'purchase' then 1 else 0 end) as purchase_count
+        sum(case when event_name = 'purchase' then 1 else 0 end) as purchase_count,
+        min(case when event_name = 'page_view' then event_at end) as first_page_view_at,
+        min(case when event_name = 'add_to_cart' then event_at end) as first_add_to_cart_at,
+        min(case when event_name = 'purchase' then event_at end) as first_purchase_at
     from events
     group by
         session_id,
@@ -50,12 +53,36 @@ session_metrics as (
         page_view_count,
         add_to_cart_count,
         purchase_count,
+        first_page_view_at,
+        first_add_to_cart_at,
+        first_purchase_at,
+        page_view_count > 0 as has_page_view,
         add_to_cart_count > 0 as has_cart_add,
         purchase_count > 0 as has_purchase,
+        (page_view_count > 0 and add_to_cart_count > 0 and first_page_view_at <= first_add_to_cart_at) as has_sequential_cart,
+        (
+            page_view_count > 0
+            and add_to_cart_count > 0
+            and purchase_count > 0
+            and first_page_view_at <= first_add_to_cart_at
+            and first_add_to_cart_at <= first_purchase_at
+        ) as has_sequential_purchase,
         case
-            when purchase_count > 0 then 'purchase'
-            when add_to_cart_count > 0 then 'add_to_cart'
-            else 'page_view'
+            when
+                page_view_count > 0
+                and add_to_cart_count > 0
+                and purchase_count > 0
+                and first_page_view_at <= first_add_to_cart_at
+                and first_add_to_cart_at <= first_purchase_at
+                then 'purchase'
+            when
+                page_view_count > 0
+                and add_to_cart_count > 0
+                and first_page_view_at <= first_add_to_cart_at
+                then 'add_to_cart'
+            when page_view_count > 0
+                then 'page_view'
+            else 'none'
         end as furthest_funnel_step
     from session_aggregates
 )
@@ -72,7 +99,13 @@ select
     page_view_count,
     add_to_cart_count,
     purchase_count,
+    first_page_view_at,
+    first_add_to_cart_at,
+    first_purchase_at,
+    has_page_view,
     has_cart_add,
     has_purchase,
+    has_sequential_cart,
+    has_sequential_purchase,
     furthest_funnel_step
 from session_metrics
